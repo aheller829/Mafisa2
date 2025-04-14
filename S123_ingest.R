@@ -4,6 +4,7 @@ library(tidyverse)
 library(readxl)
 
 ### Point to data folder
+
 dir <- "C:/Users/allie.heller/OneDrive - Biodiversity Research Institute/Desktop/Mafisa 2 Data/L1/"
 setwd(dir)
 
@@ -119,6 +120,7 @@ og_mafisa2_soil_clean <- read.csv("ZambiaSoilC_L1.1.csv")
 og_dbh_clean <- read.csv("ZambiaSoilC_dbh_L1.1.csv")
 
 
+
 # Join older form version data to big data tables
 names(Mafisa_2_data_join)
 names(og_mafisa2_soil_clean)
@@ -127,14 +129,59 @@ Mafisa_2_data_join <- rbind(Mafisa_2_data_join, og_mafisa2_soil_clean)
 # Join older and current dbh data tables
 dbh_clean_join <- rbind(dbh_clean, og_dbh_clean)
 
+
 # Read in Kondwani's manually edited dbh excel data table
 dbh_edits <- read.csv("dbh_join_KondwaniEdits.csv")
 
-# Replace edited species data in relevant plots
-dbh_edits <- dplyr::rename(dbh_edits, SoilPlot = Soil.plot) # Rename plot name column so dataframes can be joined
+# Remove rows containing NA values
+dbh_edits <- na.omit(dbh_edits)
 
-# Left join edited excel dbh form with S123 dbh data
-Mafisa_2_dbh_join <- dplyr::left_join(dbh_clean_join, dbh_edits)
+# Rename variables
+dbh_edits <- dplyr::select(dbh_edits, SoilPlot = Soil.plot, Plant.species.name, Tree_dbh = Plant.DbH.cm) # Rename plot name column so dataframes can be joined
+
+# Add globalIDs to edited table
+# First, add SS plot names/id, date
+dbh_plotnames <- dplyr::select(Mafisa_2_data_join, ParentGlobalID, SoilPlot, CreationDate)
+dbh_edits <- dplyr::left_join(dbh_edits, dbh_plotnames) # Join
+
+# Add variables as needed to rbind
+names(dbh_clean_join)
+names(dbh_edits)
+dbh_edits <- dbh_edits %>%
+  dplyr::mutate(ObjectID = NA, GlobalID = NA, Creator = NA, EditDate = NA, Editor = NA) %>%
+  dplyr::select(ObjectID, GlobalID, Tree_ID = Plant.species.name, Tree_dbh, ParentGlobalID, CreationDate, Creator, EditDate,
+                Editor, SoilPlot)
+
+# Remove edited plots from dbh_clean_join
+unique(dbh_clean_join$SoilPlot)
+unique(dbh_edits$SoilPlot)
+dbh_clean_join <- subset(dbh_clean_join, !(dbh_clean_join$SoilPlot %in% dbh_edits$SoilPlot))
+
+# Rbind tables 
+Mafisa_2_dbh_join <- rbind(dbh_clean_join, dbh_edits)
+
+# Fill in ObjectID
+Mafisa_2_dbh_join$ObjectID <- seq.int(nrow(Mafisa_2_dbh_join))
+
+# Refine variables
+Mafisa_2_dbh_join <- dplyr::select(Mafisa_2_dbh_join, ObjectID, ParentGlobalID, SoilPlot, Tree_ID, Tree_dbh)
+
+# Add x,y data
+location <- dplyr::select(Mafisa_2_data_join, ParentGlobalID, SoilPlot, SurveyDate, x, y)
+Mafisa_2_dbh_join <- dplyr::left_join(Mafisa_2_dbh_join, location)
+
+
+# QC again
+# QA/QC check
+dbh_qc <- Mafisa_2_dbh_join  %>%
+  dplyr::filter(Tree_dbh < 5 | # If any rows are below expected range
+                  is.na(Tree_dbh) | # If any dbh rows contain NA
+                  is.na(Tree_ID)) # If any species name rows contain NA
+
+
+# Write to csv
+write.csv(Mafisa_2_dbh_join, "Mafisa_2_dbh_20250414.csv", row.names = FALSE)
+
 
 # QC check - tally how many observations per plot are in each original table
 # These numbers should remain consistent across tables
