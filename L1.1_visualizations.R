@@ -13,11 +13,12 @@ soilbiomass <- read.csv("Mafisa2_SoilBiomass_L1.1.csv")
 # Visualize data 
 # Bulk density
 names(soilbiomass)
+
 bd_wetmass <- ggplot(soilbiomass, aes(x = BD_wet_mass_total)) + 
   geom_histogram(fill = "dodgerblue1") + xlab("BD wet mass total (g)") +
   geom_vline(xintercept = 5000, linetype = "dashed", color = "red") +
   geom_vline(xintercept = 15000, linetype = "dashed", color = "red") +
-  scale_x_continuous(breaks = seq(0, 16000, 2000), limits = c(0, 16000))
+  scale_x_continuous(breaks = seq(0, 16000, 2000), limits = c(0, 16000)) 
 bd_wetmass
 
 bd_wtd <- ggplot(soilbiomass, aes(x = WTD_mass)) + 
