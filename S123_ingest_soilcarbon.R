@@ -244,3 +244,5 @@ bio_qc <- Mafisa_2_data_join %>%
 
 # Save QC'd data 
 write.csv(Mafisa_2_data_join, "L1/Mafisa2_SoilBiomass_L1.1.csv", row.names = FALSE)
+
+
