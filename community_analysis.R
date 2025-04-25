@@ -31,7 +31,7 @@ names(vegtable)
 analysis.table <- soilbiomass %>%
   dplyr::left_join(gctable) %>%
   dplyr::left_join(vegtable) %>%
-  dplyr::select(litter, AnnualForb:Tree, TotalFoliar) %>%
+  dplyr::select(TreeCount, litter, cm10_50cm:m2_3m, AnnualForb:TotalFoliar) %>%
   na.omit()
 # Give each row an ID column (rownumber)
 analysis.table <- dplyr::mutate(analysis.table, ID = rownames(analysis.table))
@@ -40,7 +40,7 @@ analysis.table$ID <- as.numeric(analysis.table$ID)
 
 fg.foliar <- dplyr::select(analysis.table, -ID)
 # Convert to a bray-curtis dissimilarity matrix
-fg.foliar.dist <- vegan::vegdist(fg.foliar, method = "bray", binary = FALSE)
+fg.foliar.dist <- vegan::vegdist(fg.foliar, method = "gower", binary = FALSE)
 # Run a PCoA on functional groups and structural indicators
 vegPCA <- cmdscale(fg.foliar.dist, k = 2)
 # View ordination
@@ -65,7 +65,7 @@ par(mfrow=c(1,1))
 # Start with number of clusters indicated by cluster metrics (k)
 # Adjust fuzziness/crispness with membership exponent approaching 2 for fuzzier classification
 library(cluster)
-veg.fanny <- fanny(fg.foliar.dist, k = 3, memb.exp = 1.01, maxit = 1000, keep.diss = TRUE)
+veg.fanny <- fanny(fg.foliar.dist, k = 3, memb.exp = 1.2, maxit = 1000, keep.diss = TRUE)
 # Display's Dunn's partition coefficient (low coeff = very fuzzy, near 1 = crisp)
 veg.fanny$coeff
 # Build a dataframe of membership values
@@ -78,7 +78,7 @@ clusplot(veg.fanny, lines = 0, labels = 3, plotchar = FALSE, col.text = "black",
 colors <- c("darkseagreen4", "palevioletred1", "steelblue2", "tan3")
 # Ordinate
 ordiplot(vegPCA, main = "Fuzzy Clusters - Plant Abundance")
-stars(veg.fanny$membership, locatio = vegPCA, draw.segm = TRUE, add = TRUE, scale = FALSE, len = 0.08, 
+stars(veg.fanny$membership, locatio = vegPCA, draw.segm = TRUE, add = TRUE, scale = FALSE, len = 0.02, 
       col.segments = colors)
 ordihull(vegPCA, veg.fanny$clustering, col = "black")
 ordispider(vegPCA, veg.fanny$clustering, col = "gray", label = T)
@@ -101,12 +101,12 @@ topmems$ID <- as.numeric(topmems$ID)
 topmems<- inner_join(topmems, analysis.table)
 
 
-
-# Rename clusters#Edited cluster numbers to use for spiders
+# Rename clusters
+#Edited cluster numbers to use for spiders
 names(topmems)
 topmem.summary <- topmems %>%
-  dplyr::select(Abies:Yucca, S, Gap2, Cluster) %>%
-  gather(Species, MeanCover, Abies:Gap2, factor_key = FALSE) %>%
+  dplyr::select(TreeCount:TotalFoliar, Cluster) %>%
+  gather(Species, MeanCover, TreeCount:TotalFoliar, factor_key = FALSE) %>%
   group_by(Cluster, Species) %>%
   select_if(is.numeric) %>%
   summarise_all(funs(mean)) %>%
@@ -114,9 +114,24 @@ topmem.summary <- topmems %>%
 # Sort by highest
 topmem.summary <- topmem.summary %>%
   group_by(Cluster) %>%
-  arrange(desc(MeanCover), .by_group = TRUE)
-# Use lookup table to rename
-clusternames <- read.csv("clusternames.csv")
-# Join
-topmems <- dplyr::left_join(topmems, clusternames, by = "Cluster")
+  arrange(desc(MeanCover), .by_group = TRUE) %>%
+  dplyr::mutate_if(is.numeric, round, 1)
+
+
+
+# Boxplots of indicators by cluster
+names(topmems)
+topmems %>%
+  ggplot(aes(x = Cluster, y = TotalFoliar, fill = Cluster)) +
+  geom_boxplot() +
+  theme(
+    legend.position="none",
+    plot.title = element_text(size=11)
+  ) +
+  ggtitle("Number of trees (DbH > 5) across clusters") +
+  xlab("")
+
+
+
+
 

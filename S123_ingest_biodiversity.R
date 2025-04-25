@@ -146,7 +146,7 @@ plantcover <- plantcover %>%
 plantnames <- read.csv("L1/plantnames.csv")
 plantcover <- plantcover %>%
   dplyr::left_join(plantnames) %>%
-  dplyr::select(SoilPlot, PlantName = PlantNameEdited, FG)
+  dplyr::select(SoilPlot, PlantName = PlantNameEdited, Cover, FG)
 
 # QC check - how many transects were recorded per plot?
 veg_transect_qc <- MAFISA_2_2x2_Veg_Plot_0 %>%
