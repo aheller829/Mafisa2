@@ -14,6 +14,10 @@ dbh <- read.csv("Mafisa_2_dbh_20250415.csv")
 gctable <- read.csv("Mafisa2_GC_L1.1.csv")
 vegtable <- read.csv("Mafisa2_Veg2x2_BD_L1.1.csv")
 
+# Read in plot cover class
+cover <- read.csv("plot_cover.csv")
+
+
 # Count trees with dbh > 5 per plot and join to soil table
 dbh_summary <- dbh %>%
   dplyr::group_by(SoilPlot) %>%
@@ -31,14 +35,22 @@ names(vegtable)
 analysis.table <- soilbiomass %>%
   dplyr::left_join(gctable) %>%
   dplyr::left_join(vegtable) %>%
-  dplyr::select(TreeCount, litter, cm10_50cm:m2_3m, AnnualForb:TotalFoliar) %>%
-  na.omit()
+  dplyr::left_join(cover) %>%
+  dplyr::select(SoilPlot, TreeCount, AnnualForb:TotalFoliar, VegClass)
 # Give each row an ID column (rownumber)
 analysis.table <- dplyr::mutate(analysis.table, ID = rownames(analysis.table))
 analysis.table$ID <- as.numeric(analysis.table$ID)
 
+# Look at NA values
+names(analysis.table)
+nas <- dplyr::filter(analysis.table, if_any(c(litter, AnnualForb, AnnualGrass, Carex, PerennialForb, PerennialGrass,
+                                               Shrub, Subshrub, Tree, SpeciesRichness, TotalFoliar), ~ !is.na(.)))
 
-fg.foliar <- dplyr::select(analysis.table, -ID)
+# Remove nominal/categorical variables
+fg.foliar <- dplyr::select(analysis.table, -ID, -SoilPlot, -VegClass)
+# Remove NA values
+fg.foliar <- na.omit(fg.foliar)
+
 # Convert to a bray-curtis dissimilarity matrix
 fg.foliar.dist <- vegan::vegdist(fg.foliar, method = "gower", binary = FALSE)
 # Run a PCoA on functional groups and structural indicators
@@ -122,13 +134,12 @@ topmem.summary <- topmem.summary %>%
 # Boxplots of indicators by cluster
 names(topmems)
 topmems %>%
-  ggplot(aes(x = Cluster, y = TotalFoliar, fill = Cluster)) +
+  ggplot(aes(x = Cluster, y = m2_3m, fill = Cluster)) +
   geom_boxplot() +
   theme(
     legend.position="none",
     plot.title = element_text(size=11)
   ) +
-  ggtitle("Number of trees (DbH > 5) across clusters") +
   xlab("")
 
 

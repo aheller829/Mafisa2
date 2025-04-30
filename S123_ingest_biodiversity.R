@@ -30,6 +30,30 @@ list2env(gc_list, envir = .GlobalEnv) # Write each excel sheet to a separate dat
 # Produces MAFISA_2_Ground_Cover_0, distance_1
 
 
+# Compare dates and plot names
+soilbiomass <- read.csv("L1/Mafisa2_SoilBiomass_L1.1.csv")
+# First extract date and soil plot name from each data table; then standardize date format and remove timestamp
+soildate <- dplyr::select(soilbiomass, SurveyDate_soil = SurveyDate, SoilPlot)
+soildate$SurveyDate_soil <- format(as.POSIXct(soildate$SurveyDate_soil, format = '%Y-%m-%d %H:%M:%S'), format = '%Y-%m-%d')
+plotchardate <- dplyr::select(MAFISA_2_General_Site_BD_Fo_0, SurveyDate_pc = SurveyDate, SoilPlot)
+plotchardate$SurveyDate_pc <- format(as.POSIXct(plotchardate$SurveyDate_pc, format = '%Y-%m-%d %H:%M:%S'), format = '%Y-%m-%d')
+veg2x2date <- dplyr::select(MAFISA_2_2x2_Veg_Plot_0, SurveyDate_veg = SurveyDate, SoilPlot)
+veg2x2date$SurveyDate_veg <- format(as.POSIXct(veg2x2date$SurveyDate_veg, format = '%Y-%m-%d %H:%M:%S'), format = '%Y-%m-%d')
+gcdate <- dplyr::select(MAFISA_2_Ground_Cover_0, SurveyDate_gc = Date, SoilPlot)
+gcdate$SurveyDate_gc <- format(as.POSIXct(gcdate$SurveyDate_gc, format = '%Y-%m-%d %H:%M:%S'), format = '%Y-%m-%d')
+# Join together 
+plotdates <- soildate %>%
+  dplyr::left_join(plotchardate) %>%
+  dplyr::left_join(veg2x2date) %>%
+  dplyr::left_join(gcdate) %>%
+  dplyr::select(SoilPlot, SurveyDate_soil, SurveyDate_pc, SurveyDate_veg, SurveyDate_gc) %>%
+  dplyr::distinct() 
+# Filter for plots where dates do not match across methods
+missing_plotdates <- dplyr::mutate(plotdates, Match = ifelse(SurveyDate_soil == SurveyDate_veg, TRUE, FALSE))
+missing_plotdates <- dplyr::filter_at(plotdates, vars(SurveyDate_soil, SurveyDate_pc, SurveyDate_veg, SurveyDate_gc), any_vars(is.na(.)))
+
+
+
 # Check variable names
 names(MAFISA_2_General_Site_BD_Fo_0)
 
@@ -58,7 +82,7 @@ featuredistance_qc <- dplyr::filter(MAFISA_2_General_Site_BD_Fo_0,
 
 
 
-# Find where plots have mulitple rows
+# Find any plots have multiple entries
 plot_qc <- MAFISA_2_General_Site_BD_Fo_0 %>%
   dplyr::group_by(SoilPlot) %>%
   dplyr::summarise(count = n()) %>%
@@ -66,10 +90,8 @@ plot_qc <- MAFISA_2_General_Site_BD_Fo_0 %>%
 doubleplots <- subset(MAFISA_2_General_Site_BD_Fo_0, MAFISA_2_General_Site_BD_Fo_0$SoilPlot %in% plot_qc$SoilPlot)
 
 
-
-
-
-
+# Write L1.1 to csv
+write.csv(MAFISA_2_General_Site_BD_Fo_0, "L1/Mafisa2_PlotChar_L1.1.csv", row.names = FALSE)
 
 
 ### Veg 2x2 ingestion
@@ -139,14 +161,15 @@ plantcover <- plantcover %>%
   dplyr::distinct()
 # Write list of plant species to csv to fix spelling mistakes
 # plantnames <- plantcover %>%
- #  dplyr::select(-SoilPlot, -Cover) %>%
- #  dplyr::distinct()
-# write.csv(plantnames, "L1/plantnames.csv", row.names = FALSE)
+ # dplyr::select(-SoilPlot, -Cover) %>%
+ # dplyr::distinct()
+# write.csv(plantnames, "L1/plantnames_unedited.csv", row.names = FALSE)
 # Read in edited plant names and join to table
 plantnames <- read.csv("L1/plantnames.csv")
 plantcover <- plantcover %>%
   dplyr::left_join(plantnames) %>%
-  dplyr::select(SoilPlot, PlantName = PlantNameEdited, Cover, FG)
+  dplyr::select(SoilPlot, PlantName = PlantNameEdited, Cover, FG) %>%
+  dplyr::filter(!is.na(PlantName))
 
 # QC check - how many transects were recorded per plot?
 veg_transect_qc <- MAFISA_2_2x2_Veg_Plot_0 %>%
@@ -156,6 +179,9 @@ veg_transect_qc <- MAFISA_2_2x2_Veg_Plot_0 %>%
 ggplot(veg_transect_qc, aes(x = transect_count)) + 
   geom_histogram(fill = "dodgerblue1") + xlab("Number of transects per plot") +
   scale_x_continuous(breaks = seq(0, 10, 1), limits = c(1, 10))
+# Look at plots with incorrect transect number
+veg_transect_qc <- dplyr::filter(veg_transect_qc, transect_count != 4)
+veg_2x2_header_qc <- subset(MAFISA_2_2x2_Veg_Plot_0, MAFISA_2_2x2_Veg_Plot_0$SoilPlot %in% veg_transect_qc$SoilPlot)
 
 
 # Add cover class quantitative midpoint
@@ -226,6 +252,8 @@ distance_1 <- distance_1 %>%
 gc_transect_qc <- MAFISA_2_Ground_Cover_0 %>%
   dplyr::group_by(SoilPlot) %>%
   dplyr::summarise(transect_count = n())
+# Write to csv
+write.csv(gc_transect_qc, "L1/gc_transect_qc.csv", row.names = FALSE)
 # Visualize with histogram
 groundcover_hist <- ggplot(gc_transect_qc, aes(x = transect_count)) + 
   geom_histogram(fill = "dodgerblue1") + xlab("Ground cover observations per plot") +
