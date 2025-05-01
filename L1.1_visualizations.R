@@ -142,14 +142,17 @@ PerformanceAnalytics::chart.Correlation(trees, histogram=TRUE, pch=19)
 
 # Grass correlation plot
 grasses <- dplyr::select(cover_comp, SoilPlot, Grass_PointIntercept = grass_leaf_or_stem, Grass_Quadrat = Grass2x2)
+grasses <- dplyr::distinct(grasses)
 
-grasses <- soilbiomass %>%
+ocularest <- soilbiomass %>%
   dplyr::select(SoilPlot, DRH_pct, SRH_pct) %>%
-  dplyr::mutate(ocularest, Grass_Ocular = DRH_pct + SRH_pct) %>%
-  dplyr::left_join(grasses) %>%
-  dplyr::select(Grass_Ocular, Grass_PointIntercept, Grass_Quadrat) 
+  dplyr::mutate(Grass_Ocular = DRH_pct + SRH_pct) 
+ocularest <- dplyr::distinct(ocularest)
 
-PerformanceAnalytics::chart.Correlation(ocularest, histogram=TRUE, pch=19)
+grasses_comp <- dplyr::left_join(grasses, ocularest, by = "SoilPlot")
+grasses_comp <- dplyr::select(grasses_comp, -SoilPlot, -DRH_pct, -SRH_pct)
+
+PerformanceAnalytics::chart.Correlation(grasses_comp, histogram=TRUE, pch=19)
 
 
 

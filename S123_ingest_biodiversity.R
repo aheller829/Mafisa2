@@ -34,7 +34,7 @@ list2env(gc_list, envir = .GlobalEnv) # Write each excel sheet to a separate dat
 soilbiomass <- read.csv("L1/Mafisa2_SoilBiomass_L1.1.csv")
 # First extract date and soil plot name from each data table; then standardize date format and remove timestamp
 soildate <- dplyr::select(soilbiomass, SurveyDate_soil = SurveyDate, SoilPlot)
-soildate$SurveyDate_soil <- format(as.POSIXct(soildate$SurveyDate_soil, format = '%Y-%m-%d %H:%M:%S'), format = '%Y-%m-%d')
+soildate$SurveyDate_soil <- format(as.POSIXct(soildate$SurveyDate_soil, format = '%m/%d/%Y %H:%M'), format = '%Y-%m-%d')
 plotchardate <- dplyr::select(MAFISA_2_General_Site_BD_Fo_0, SurveyDate_pc = SurveyDate, SoilPlot)
 plotchardate$SurveyDate_pc <- format(as.POSIXct(plotchardate$SurveyDate_pc, format = '%Y-%m-%d %H:%M:%S'), format = '%Y-%m-%d')
 veg2x2date <- dplyr::select(MAFISA_2_2x2_Veg_Plot_0, SurveyDate_veg = SurveyDate, SoilPlot)
@@ -49,8 +49,16 @@ plotdates <- soildate %>%
   dplyr::select(SoilPlot, SurveyDate_soil, SurveyDate_pc, SurveyDate_veg, SurveyDate_gc) %>%
   dplyr::distinct() 
 # Filter for plots where dates do not match across methods
-missing_plotdates <- dplyr::mutate(plotdates, Match = ifelse(SurveyDate_soil == SurveyDate_veg, TRUE, FALSE))
-missing_plotdates <- dplyr::filter_at(plotdates, vars(SurveyDate_soil, SurveyDate_pc, SurveyDate_veg, SurveyDate_gc), any_vars(is.na(.)))
+missing_plotdates <- dplyr::mutate(plotdates, Match = ifelse(SurveyDate_soil == SurveyDate_pc & SurveyDate_soil == SurveyDate_veg &
+                                  SurveyDate_soil == SurveyDate_gc & SurveyDate_pc == SurveyDate_veg & SurveyDate_pc == SurveyDate_gc &
+                                  SurveyDate_veg == SurveyDate_gc, TRUE, FALSE))
+missing_plotdates <- dplyr::filter(missing_plotdates, Match != TRUE)
+
+
+# Create shapefiles to map in Arc and compare plot locations by name
+
+
+
 
 
 
@@ -192,13 +200,14 @@ plantcover <- dplyr::mutate(plantcover, CoverEst = ifelse(Cover == "0_5", 2.5,
                                                     ifelse(Cover == "50_75", 62.5,
                                                     ifelse(Cover == "75-95", 85,
                                                     ifelse(Cover == "95_100", 97.5, NA)))))))
+
+
 # Create a wide table with quantitative cover estimates averaged by species per plot
 cover_wide <- plantcover %>%
   dplyr::group_by(SoilPlot, PlantName) %>%
   dplyr::summarise(CoverAverage = mean(CoverEst)) %>%
   dplyr::ungroup() %>%
-  tidyr::spread(key = PlantName, value = CoverAverage, fill = 0) %>%
-  dplyr::select(-V1)
+  tidyr::spread(key = PlantName, value = CoverAverage, fill = 0) 
 
 # Calculate wide table by functional group, eliminating species records that couldn't be matched
 fg_cover_wide <- plantcover %>%
@@ -229,7 +238,8 @@ vegtable <- fg_cover_wide %>%
   dplyr::left_join(speciesrichness) %>%
   dplyr::left_join(totalfoliar) %>%
   dplyr::left_join(cover_wide) %>%
-  dplyr::mutate_if(is.numeric, round, 1)
+  dplyr::mutate_if(is.numeric, round, 1) %>%
+  dplyr::filter(!is.na(SoilPlot))
 
 # Write to csv
 write.csv(vegtable, "L1/Mafisa2_Veg2x2_BD_L1.1.csv", row.names = FALSE)
@@ -342,9 +352,7 @@ height <- distance_1 %>%
 
 # Join height and gc 
 gctable <- cover_wide %>%
-  dplyr::left_join(height) %>%
-  dplyr::select(-qc)
-
+  dplyr::left_join(height) 
 
 # Save to csv
 write.csv(gctable, "L1/Mafisa2_GC_L1.1.csv", row.names = FALSE)
