@@ -174,6 +174,8 @@ plantcover <- plantcover %>%
 # write.csv(plantnames, "L1/plantnames_unedited.csv", row.names = FALSE)
 # Read in edited plant names and join to table
 plantnames <- read.csv("L1/plantnames.csv")
+
+unique(plantnames$FG)
 plantcover <- plantcover %>%
   dplyr::left_join(plantnames) %>%
   dplyr::select(SoilPlot, PlantName = PlantNameEdited, Cover, FG) %>%
@@ -198,7 +200,7 @@ plantcover <- dplyr::mutate(plantcover, CoverEst = ifelse(Cover == "0_5", 2.5,
                                                     ifelse(Cover == "5_25", 15,
                                                     ifelse(Cover == "25_50", 37.5,
                                                     ifelse(Cover == "50_75", 62.5,
-                                                    ifelse(Cover == "75-95", 85,
+                                                    ifelse(Cover == "75_95", 85,
                                                     ifelse(Cover == "95_100", 97.5, NA)))))))
 
 
@@ -209,6 +211,42 @@ cover_wide <- plantcover %>%
   dplyr::ungroup() %>%
   tidyr::spread(key = PlantName, value = CoverAverage, fill = 0) 
 
+
+# Presence/absence
+presence <- plantcover %>%
+  dplyr::select(SoilPlot, PlantName, Presence = Cover) %>%
+  dplyr::mutate(Presence = 1) %>%
+  dplyr::distinct() %>%
+  dplyr::ungroup() %>%
+  tidyr::spread(key = PlantName, value = Presence, fill = 0)
+presence <- dplyr::filter(presence, !is.na(SoilPlot))
+# Write to csv
+write.csv(presence, "L1/Mafisa2_SpeciesPresence_L1.1.csv", row.names = FALSE)
+# Calculate species present at a high number of plots
+topspecies <- plantcover %>%
+  dplyr::select(SoilPlot, PlantName, Presence = Cover) %>%
+  dplyr::mutate(Presence = 1) %>%
+  dplyr::distinct() %>%
+  dplyr::ungroup() %>%
+  dplyr::group_by(PlantName) %>%
+  dplyr::summarise(PlotCount = n())
+write.csv(topspecies, "L1/Mafisa2_topspecies_L1.1.csv", row.names = FALSE)
+
+
+# Create wide table of species present at more than 5 plots
+topspecies <- dplyr::filter(topspecies, PlotCount > 5)
+topspwide <- subset(plantcover, plantcover$PlantName %in% topspecies$PlantName)
+# Make sure all plots are represented
+unique(topspwide$SoilPlot)
+topspwide <- topspwide %>%
+  dplyr::select(SoilPlot, PlantName, CoverEst) %>%
+  dplyr::group_by(SoilPlot, PlantName) %>%
+  dplyr::summarise(CoverAverage = mean(CoverEst)) %>%
+  tidyr::spread(key = PlantName, value = CoverAverage, fill = 0) %>%
+  dplyr::filter(!is.na(SoilPlot))
+write.csv(topspwide, "L1/Mafisa2_topspecieswide_L1.1.csv", row.names = FALSE)
+
+
 # Calculate wide table by functional group, eliminating species records that couldn't be matched
 fg_cover_wide <- plantcover %>%
   dplyr::left_join(plantnames)%>%
@@ -218,7 +256,8 @@ fg_cover_wide <- plantcover %>%
   dplyr::summarize(FG_avg = mean(CoverEst)) %>%
   dplyr::mutate_if(is.numeric, round, 1)%>%
   dplyr::ungroup() %>%
-  tidyr::spread(key = FG, value = FG_avg, fill = 0)
+  tidyr::spread(key = FG, value = FG_avg, fill = 0) %>%
+  dplyr::filter(!is.na(SoilPlot))
 
 
 # Take average total foliar cover by calculating mean of total cover record
@@ -232,14 +271,30 @@ speciesrichness <- plantcover %>%
   dplyr::summarise(SpeciesRichness = n())
 
 
+
+# Extract presence of large gaps
+gaps <- MAFISA_2_2x2_Veg_Plot_0 %>%
+  dplyr::select(SoilPlot, Gaps100cm_plus) %>%
+  dplyr::mutate(Gaps100cm_plus = ifelse(Gaps100cm_plus == "Yes", 1, 0)) %>%
+  dplyr::group_by(SoilPlot) %>%
+  dplyr::summarise(LargeGaps = sum(Gaps100cm_plus))
+
+
+
+
+
+
 # Join these derivatives into an analysis-ready table
 names(MAFISA_2_2x2_Veg_Plot_0)
 vegtable <- fg_cover_wide %>%
   dplyr::left_join(speciesrichness) %>%
   dplyr::left_join(totalfoliar) %>%
   dplyr::left_join(cover_wide) %>%
+  dplyr::left_join(gaps) %>%
   dplyr::mutate_if(is.numeric, round, 1) %>%
   dplyr::filter(!is.na(SoilPlot))
+
+
 
 # Write to csv
 write.csv(vegtable, "L1/Mafisa2_Veg2x2_BD_L1.1.csv", row.names = FALSE)
@@ -349,10 +404,26 @@ height <- distance_1 %>%
   tidyr::spread(PlantHeight, height_class_percent, fill = 0) %>%
   dplyr::mutate_if(is.numeric, round, 0)
 
+# Calculate average height by taking midpoint of height classes and finding plot mean
+unique(distance_1$PlantHeight)
+averageheight <- distance_1 %>%
+  dplyr::select(SoilPlot, PlantHeight) %>%
+  dplyr::mutate(HeightEst = ifelse(PlantHeight == "cm10_50cm", 30,
+                            ifelse(PlantHeight == "cm50_1m", 75,
+                            ifelse(PlantHeight == "m1_2m", 150,
+                            ifelse(PlantHeight == "m2_3m", 250,
+                            ifelse(PlantHeight == "less_10cm", 5,
+                            ifelse(PlantHeight == "greater_3m", 350,
+                            ifelse(PlantHeight == "no_plant", 0, NA)))))))) %>%
+  dplyr::group_by(SoilPlot) %>%
+  dplyr::summarise(MeanHeight = mean(HeightEst))
+  
+
 
 # Join height and gc 
 gctable <- cover_wide %>%
-  dplyr::left_join(height) 
+  dplyr::left_join(height) %>%
+  dplyr::left_join(averageheight)
 
 # Save to csv
 write.csv(gctable, "L1/Mafisa2_GC_L1.1.csv", row.names = FALSE)

@@ -15,9 +15,9 @@ mafisa2_soil_biomass_list <- lapply(mafisa2_soil_biomass, function(x) read_excel
 names(mafisa2_soil_biomass_list ) <- mafisa2_soil_biomass # Pull sheet names
 list2env(mafisa2_soil_biomass_list, envir=.GlobalEnv) # Write each excel sheet to a separate dataframe 
 
-# Create a new dataframe of plot names linked to unique identifier (renamed ParentGlobalID)
-names(Mafisa_2_Soil_and_Biomass_S_0)
-plotnames <- dplyr::select(Mafisa_2_Soil_and_Biomass_S_0, ParentGlobalID = GlobalID, SoilPlot)
+# Create a new dataframe of plot names linked to unique identifier (renamed ParentGlobalID), using edited L1 data
+plotnames <- read.csv("L1/Mafisa2_SoilBiomass_L1.1.csv")
+plotnames <- dplyr::select(plotnames, ParentGlobalID, SoilPlot)
 
 # Clean bulk density weight increment table
 bulk_density_clean <- bulk_density_mass_increment_1 %>%
@@ -119,6 +119,16 @@ Mafisa_2_data_join <- dplyr::mutate(Mafisa_2_data_join, FormVersion = "Mafisa_2 
 og_mafisa2_soil_clean <- read.csv("L1/ZambiaSoilC_L1.1.csv")
 og_dbh_clean <- read.csv("L1/ZambiaSoilC_dbh_L1.1.csv")
 
+names(og_mafisa2_soil_clean)
+og_mafisa2_soil_clean <- og_mafisa2_soil_clean %>%
+  dplyr::select(-SoilPlot) %>%
+  dplyr::left_join(plotnames)
+
+names(og_dbh_clean)
+og_dbh_clean <- og_dbh_clean %>%
+  dplyr::select(-SoilPlot) %>%
+  dplyr::left_join(plotnames)
+
 
 
 # Join older form version data to big data tables
@@ -139,16 +149,17 @@ dbh_edits <- na.omit(dbh_edits)
 # Rename variables
 dbh_edits <- dplyr::select(dbh_edits, SoilPlot = Soil.plot, Plant.species.name, Tree_dbh = Plant.DbH.cm) # Rename plot name column so dataframes can be joined
 
-# Add globalIDs to edited table
-# First, add SS plot names/id, date
-dbh_plotnames <- dplyr::select(Mafisa_2_data_join, ParentGlobalID, SoilPlot, CreationDate)
-dbh_edits <- dplyr::left_join(dbh_edits, dbh_plotnames) # Join
+
+# Add GlobalID/old plot names
+dbh_edits <- dplyr::left_join(dbh_edits, plotnames) # Join
+
+
 
 # Add variables as needed to rbind
 names(dbh_clean_join)
 names(dbh_edits)
 dbh_edits <- dbh_edits %>%
-  dplyr::mutate(ObjectID = NA, GlobalID = NA, Creator = NA, EditDate = NA, Editor = NA) %>%
+  dplyr::mutate(ObjectID = NA, GlobalID = NA, CreationDate = NA, Creator = NA, EditDate = NA, Editor = NA) %>%
   dplyr::select(ObjectID, GlobalID, Tree_ID = Plant.species.name, Tree_dbh, ParentGlobalID, CreationDate, Creator, EditDate,
                 Editor, SoilPlot)
 
@@ -180,7 +191,7 @@ dbh_qc <- Mafisa_2_dbh_join  %>%
 
 
 # Write to csv
-write.csv(Mafisa_2_dbh_join, "L1/Mafisa_2_dbh_20250415.csv", row.names = FALSE)
+write.csv(Mafisa_2_dbh_join, "L1/Mafisa_2_dbh_20250505.csv", row.names = FALSE)
 
 
 
@@ -246,3 +257,18 @@ bio_qc <- Mafisa_2_data_join %>%
 write.csv(Mafisa_2_data_join, "L1/Mafisa2_SoilBiomass_L1.1.csv", row.names = FALSE)
 
 
+
+# Compare old and new plot names
+oldnames_soilbiomass <- read.csv("L0/Mafisa_2 Soil and Biomass_csv/Mafisa_2_Soil_and_Biomass_Survey_0.csv")
+oldnames_soilbiomass <- dplyr::select(oldnames_soilbiomass, ParentGlobalID = GlobalID, OldSoilPlot = Soil.plot)
+
+oldnames_soil <- read.csv("L0/Mafisa_2 Soil Sampling_csv/Mafisa_2_Soil_Sampling_0.csv")
+oldnames_soil <- dplyr::select(oldnames_soil, ParentGlobalID = GlobalID, OldSoilPlot = Soil.Plot)
+
+oldnames <- rbind(oldnames_soil, oldnames_soilbiomass)
+
+plotname_compare <- dplyr::left_join(oldnames, plotnames)
+
+plotname_compare <- dplyr::filter(plotname_compare, OldSoilPlot != SoilPlot)
+
+write.csv(plotname_compare, "L1/soil_plotname_changes.csv", row.names = FALSE)
