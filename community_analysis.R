@@ -3,6 +3,7 @@
 library(tidyverse)
 library(ggplot2)
 library(vegan)
+library(indicspecies)
 
 # Set working directory
 dir <- "C:/Users/allie.heller/OneDrive - Biodiversity Research Institute/Desktop/Mafisa 2 Data/L1/"
@@ -19,9 +20,19 @@ spwide <- read.csv("Mafisa2_topspecieswide_L1.1.csv")
 # Replace densi NA with 0
 soilbiomass <- dplyr::mutate(soilbiomass , DensiCanopyCover = ifelse(is.na(DensiCanopyCover), 0, DensiCanopyCover))
 
+# Rosewood
+rosewood <- vegtable %>%
+  dplyr::select(SoilPlot, Guibourtia.coleosperma, Pterocarpus.angolensis) %>%
+  dplyr::filter(Guibourtia.coleosperma > 1 | Pterocarpus.angolensis > 1)
+rosewood <- dplyr::left_join(rosewood, cover)
 
-
-
+classes <- cover %>%
+  dplyr::mutate(Community = ifelse(str_detect(SoilPlot, "LU[:digit:]"), "Luampa",
+                                   ifelse(str_detect(SoilPlot, "NLO[:digit:]"), "Nalolo",
+                                          ifelse(str_detect(SoilPlot, "SSN[:digit:]"), "Senanga",
+                                                 ifelse(str_detect(SoilPlot, "SS[:digit:]"), "Sioma", NA))))) %>%
+  dplyr::group_by(Community, GoogleEarthClass.1) %>%
+  dplyr::summarize(Count = n())
 
 # Read in plot cover class
 cover <- read.csv("plot_cover_photos.csv")
@@ -60,11 +71,19 @@ varjoin <- dplyr::mutate(varjoin, bare_ground = ifelse(SoilPlot == "SS05", 40, b
 
 
 
+
+
+
+
+
+
+
+
 # Subset for ordination
 names(varjoin)
 analysis.table <- varjoin %>%
   dplyr::select(SoilPlot, ID, AnnualForb:Shrub, DensiCanopyCover, TotalFoliar, bare_ground,
-                TreeCount, MeanDBH, LargeGaps, MeanHeight, Class = GoogleEarthClass.1) 
+                TreeCount, MeanDBH, LargeGaps, MeanHeight, Class = GoogleEarthClass.2) 
 
 # Remove nominal/categorical variables
 fg.foliar <- dplyr::select(analysis.table, -SoilPlot, -ID, -Class)
@@ -209,18 +228,41 @@ topmems %>%
 
 
 
+
 # CART
 library(rpart)
 library(rpart.plot)
 # Join fgs to topmems
 names(analysis.table)
-treevars <- dplyr::select(analysis.table, Class, AnnualForb:MeanHeight)
+treevars <- dplyr::select(analysis.table, Class, AnnualForb:PerennialGrass, TotalFoliar, bare_ground)
 treevars <- dplyr::rename(treevars, TreeCover = DensiCanopyCover)
 
 tree <- rpart::rpart(Class ~., data = treevars, method = "class")
 tree
 
 rpart.plot::rpart.plot(tree, extra = 101)
+
+
+
+# Indicator species analysis
+names(varjoin)
+
+sp <- varjoin %>%
+  dplyr::filter(SoilPlot != "SS04") %>%
+  dplyr::select(Abrus.pulchellus.:Xylopia.odoratissima)
+
+class <- varjoin %>%
+  dplyr::filter(SoilPlot != "SS04") %>%
+  dplyr::select(GoogleEarthClass.2)
+
+inv <- indicspecies::multipatt(sp, class$GoogleEarthClass.2)
+
+summary(inv)
+
+
+
+
+
 
 
 
