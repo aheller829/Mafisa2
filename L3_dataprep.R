@@ -108,7 +108,7 @@ soilxy_utm <- soilxy %>%
   dplyr::rename(UTM_E= X, UTM_S = Y) %>%
   cbind(soilxy) %>%
   dplyr::select(-x, -y)
-# Transform to sf object and plot to make sure they projected correctly
+# Transform to sf object and plot to make sure they projected correctly (UTM zone 42 N)
 soilxy_utm_sf <- sf::st_as_sf(soilxy_utm, coords = c("UTM_E", "UTM_S"), crs = 32634)
 ggplot() +
   geom_sf(data = westernprovince, fill = "antiquewhite1", color = "gray") +
@@ -116,31 +116,35 @@ ggplot() +
 # Format data 
 names(soilbiomass)
 
+
+
+# Read in lab data and join
+labdata <- read.csv("L2/Mafisa2_labdata_L2.csv")
+names(labdata)
+
 l3soil <- soilbiomass %>%
+  dplyr::left_join(labdata) %>%
   dplyr::left_join(soilxy_utm) %>%
   dplyr::left_join(temp) %>%
   dplyr::left_join(precip) %>%
   dplyr::mutate(Project = "Mafisa 2 Feasibility",
-                Community = ifelse(str_detect(SoilPlot, "LU[:digit:]"), "Luampa",
-                                   ifelse(str_detect(SoilPlot, "NLO[:digit:]"), "Nalolo",
+                Community = ifelse(str_detect(SoilPlot, "LU[:digit:]"), "Kanguya",
+                                   ifelse(str_detect(SoilPlot, "NLO[:digit:]"), "Mombola",
                                    ifelse(str_detect(SoilPlot, "SSN[:digit:]"), "Senanga",
-                                   ifelse(str_detect(SoilPlot, "SS[:digit:]"), "Sioma", NA)))),
-                PipeDiameter_cm = NA,
-                CoreVolume_cm3 = NA,
-                BD_g_cm3 = NA,
-                SoilTextureClass = NA,
-                EstimatedPercentSand = NA,
+                                   ifelse(str_detect(SoilPlot, "SS[:digit:]"), "Mutala", NA)))),
+                PipeDiameter_cm = 8.06,
                 VegClass = NA,
                 photo_no_north = NA,
                 photo_no_south = NA,
-                SOC_percent = NA,
-                SOC_density = NA) %>%
+                BD_frag_vol = ifelse(is.na(BD_frag_vol), 0, BD_frag_vol)) %>%
   dplyr::rowwise() %>%
   dplyr::mutate(AverageDepth_cm = mean(c(SOC1_depth, SOC2_depth))) %>%
   dplyr::select(Project, SiteLabel = SoilPlot, Community, UTM_S, UTM_E, PipeDiameter_cm,
                 SOC1_collected, SOC1_depth_cm = SOC1_depth, SOC2_collected, SOC2_depth_cm = SOC2_depth, 
-                AverageDepth_cm, CoreVolume_cm3, BD_collected, BD_wet_mass_total_g = BD_wet_mass_total, BD_rock_volume_ml = BD_frag_vol,
-                BD_g_cm3, SoilTextureClass, EstimatedPercentSand, VegClass, photo_no_north, photo_no_south, MeanAnnualRainfall_mm = precip_mm,
-                MeanAnnualTemperature_C = temp_c, SOC_percent, SOC_density)
-# Calculate average SOC sample depth
-l3soil$AverageDepth_cm <- mean(c(l3soil$SOC1_depth_cm, l3soil$SOC2_depth_cm))
+                AverageDepth_cm, CoreVolume_cm3 = BDCoreVolume, BD_collected, BD_wet_mass_total_g = BD_wet_mass_total, BD_rock_volume_ml = BD_frag_vol,
+                BD_g_cm3, SoilTextureClass = TXT_class, EstimatedPercentSand = Sand_pct, VegClass, photo_no_north, photo_no_south, MeanAnnualRainfall_mm = precip_mm,
+                MeanAnnualTemperature_C = temp_c, SOC_percent = OC, SOC_density)
+
+
+# Write to csv
+write.csv(l3soil, "L3/Mafisa2_SNAPGRAZE_format.csv", row.names = FALSE)
