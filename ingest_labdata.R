@@ -23,7 +23,7 @@ list2env(labdata_list, envir=.GlobalEnv) # Write each excel sheet to a separate 
 # Bring in field data
 soilbiomass <- read.csv("L2/Mafisa2_SoilBiomass_L2.csv")
 cover <- read.csv("L1/plot_cover_photos.csv")
-cover <- dplyr::select(cover, SoilPlot = Plot.Name, Class = GoogleEarthClass.1)
+cover <- dplyr::select(cover, SoilPlot = Plot.Name, Class = Class.1)
 
 
 ### Clean SOC table
@@ -51,6 +51,18 @@ c <- ggplot(SOC_clean, aes(x = OC)) +
   geom_histogram(fill = "dodgerblue1") + xlab("Soil organic carbon (%)") +
   scale_x_continuous(breaks = seq(0, 2, 0.1), limits = c(0, 2)) 
 c
+
+
+# Boxplots
+soc_plot <- dplyr::left_join(SOC_clean, cover)
+
+soc_plot %>%
+  dplyr::mutate(Class = ifelse(Class == "Grassland", "Dambo", Class)) %>%
+ dplyr::filter(!is.na(Class)) %>%
+  ggplot(aes(x = Class, y = OC, fill = Class)) + 
+  geom_boxplot() +
+  theme(legend.position = "none")
+
 
 
 
@@ -106,13 +118,12 @@ ggsoiltexture::ggsoiltexture(txtplot, class = "USDA") +
   scale_size_continuous(range = c(1, 5), guide = "none") +
   labs(color = "organic carbon (%)") +
   theme(legend.title = element_text(face = "bold"),
-        legend.position = "bottom")
-
+        legend.position = "bottom") 
   
   
 # Split by basecamp
 txtplot %>%
-  dplyr::filter(District == "Senanga") %>%
+  dplyr::filter(District == "Kanguya") %>%
   ggsoiltexture::ggsoiltexture(class = "USDA") +
     geom_point(aes(color = OC, size = OC)) +
     scale_color_continuous(type = "viridis", direction = -1) +
@@ -120,7 +131,9 @@ txtplot %>%
     labs(color = "organic carbon (%)") +
     # ggrepel::geom_label_repel(aes(label = Class), box.padding = 0.5, max.overlaps = 40) +
     theme(legend.title = element_text(face = "bold"),
-          legend.position = "bottom")
+          legend.position = "bottom") +
+  ggtitle("Kanguya (Luampa/BC 4)")
+
   
 
 # Stacked barchart of soil texture by basecamp
@@ -168,7 +181,7 @@ bd_clean <- dplyr::distinct(bd_clean)
 
 write.csv(bd_clean, "L1/Mafisa2_BulkDensity_L1.1.csv", row.names = FALSE)
 
-
+names(bd_clean)
 # Create histogram of BD values
 bd <- ggplot(bd_clean, aes(x = BD_dry_weight)) + 
   geom_histogram(fill = "dodgerblue1") + xlab("BD dry weight (g)") +
@@ -313,10 +326,12 @@ names(soilbiomass)
 fullbd <- dplyr::select(soilbiomass, SoilPlot, BD_wet_mass_total, BD_frag_vol) # Extract weights for full BD cores
 fullbd <- fullbd[-c(52), ]
 
+names(bd_clean)
+names(fullbd)
+
 bd_clean <- bd_clean %>%
   dplyr::left_join(fullbd) %>% # Join full core weights to lab bd
-  dplyr::mutate(SoilWaterContent = (BD_field_weight - BD_dry_weight)/BD_dry_weight) %>% # Calculate soil water content
-  dplyr::mutate(TotalBDDryWeight = BD_wet_mass_total/(1 + SoilWaterContent)) %>% # Calculate dry weight of full core
+  dplyr::mutate(TotalBDDryWeight = (BD_dry_weight/BD_field_weight)*BD_wet_mass_total) %>% # Calculate dry weight of full core
   dplyr::mutate(BDCoreVolume = 4.2^2*pi*BD_depth) %>% # Add core volume in cm ^ 3
   dplyr::mutate(BD_frag_vol = ifelse(is.na(BD_frag_vol), 0, BD_frag_vol)) %>% # Fill missing fragment measurements 
   dplyr::mutate(WholeCoreBD = TotalBDDryWeight/(BDCoreVolume - BD_frag_vol)) # Calculate bulk density
@@ -331,9 +346,18 @@ bd_clean <- dplyr::distinct(bd_clean)
 names(bd_clean)
 bd_clean <- dplyr::select(bd_clean, SoilPlot, District, BD_depth, WTD_BD_field_weight = BD_field_weight,
                           WTD_BD_fresh_weight = BD_fresh_weight, WTD_BD_dry_weight = BD_dry_weight,
-                          BDCoreVolume, SoilWaterContent, BD_fullcore_dry_weight = TotalBDDryWeight, 
+                          BDCoreVolume, BD_fullcore_dry_weight = TotalBDDryWeight, 
                           BD_g_cm3 = WholeCoreBD, SOC_density)
 
+
+
+names(bd_clean)
+names(labdata_ogSWC)
+
+bd_compare <- labdata_ogSWC %>%
+  dplyr::select(SoilPlot, BD_fullcore_dry_weight_OG = BD_fullcore_dry_weight, BD_g_cm3_OG = BD_g_cm3, SOC_density_OG = SOC_density) %>%
+  dplyr::left_join(bd_clean) %>%
+  dplyr::select(SoilPlot, BD_fullcore_dry_weight_OG, BD_fullcore_dry_weight, BD_g_cm3_OG, BD_g_cm3, SOC_density_OG, SOC_density)
 
 ### Join tables and write as L2
 labdata <- bd_clean %>%
@@ -348,9 +372,9 @@ write.csv(labdata, "L2/Mafisa2_LabData_L2.csv", row.names = FALSE)
 
 
 
-
+names(bd_clean)
 # Create histogram of BD values
-bd <- ggplot(bd_clean, aes(x = WholeCoreBD)) + 
+bd <- ggplot(bd_clean, aes(x = BD_g_cm3)) + 
   geom_histogram(fill = "dodgerblue1") + xlab("Bulk density (g/cm^3)") +
   # geom_vline(xintercept = 0, linetype = "dashed", color = "red") +
   # geom_vline(xintercept = 1.7, linetype = "dashed", color = "red") +
@@ -382,17 +406,69 @@ bd_clean %>%
   theme_ridges() +
   theme(legend.position = "none") 
 
-# Boxplots
-bd_clean %>%
-  dplyr::filter(!is.na(Class)) %>%
-  ggplot(aes(x = Class, y = SOC_density, fill = Class)) + 
-  geom_boxplot() +
-  theme(legend.position = "none")
 
 
-bd_clean %>%
-  dplyr::filter(!is.na(District)) %>%
-  ggplot(aes(x = District, y = SOC_density, fill = District)) + 
-  geom_boxplot() +
-  theme(legend.position = "none")
+# Label SOC density outliers
+is_outlier <- function(x) {
+  return(x < quantile(x, 0.25) - 1.5 * IQR(x) | x > quantile(x, 0.75) + 1.5 * IQR(x))
+}
+
+dat <- bd_clean %>% 
+  dplyr::filter(!is.na(SOC_density)) %>%
+  tibble::rownames_to_column(var = "outlier") %>% 
+  dplyr::group_by(District) %>% 
+  dplyr::mutate(is_outlier = ifelse(is_outlier(SOC_density), SOC_density, NA)) 
+
+dat$outlier[which(is.na(dat$is_outlier))] <- as.numeric(NA)
+
+dat <- dplyr::mutate(dat, outlier = ifelse(!is.na(outlier), SoilPlot, NA))
+
+ggplot(dat, aes(y = SOC_density, x = District, fill = District)) + 
+         geom_boxplot() + 
+         geom_text(aes(label = outlier), na.rm = TRUE, nudge_y = 6)
+
+
+
+# BD outliers, labeled
+names(bd_clean)
+dat <- bd_clean %>% 
+  dplyr::filter(!is.na(BD_g_cm3)) %>%
+  tibble::rownames_to_column(var = "outlier") %>% 
+  dplyr::mutate(is_outlier = ifelse(is_outlier(BD_g_cm3), BD_g_cm3, NA)) 
+
+dat$outlier[which(is.na(dat$is_outlier))] <- as.numeric(NA)
+
+dat <- dplyr::mutate(dat, outlier = ifelse(!is.na(outlier), SoilPlot, NA))
+
+ggplot(dat, aes(y = BD_g_cm3, x = "")) + 
+  geom_boxplot() + 
+  geom_text(aes(label = outlier), na.rm = TRUE, nudge_y = 0.05) + 
+  xlab("") + ggtitle("Bulk density across all plots")
+
+
+
+
+# OC percent, labeled
+dat <- labdata %>% 
+  dplyr::filter(!is.na(OC)) %>%
+  dplyr::group_by(TXT_class) %>%
+  tibble::rownames_to_column(var = "outlier") %>% 
+  dplyr::mutate(is_outlier = ifelse(is_outlier(OC), OC, NA)) 
+
+dat$outlier[which(is.na(dat$is_outlier))] <- as.numeric(NA)
+
+dat <- dplyr::mutate(dat, outlier = ifelse(!is.na(outlier), SoilPlot, NA))
+
+ggplot(dat, aes(y = OC, x = TXT_class, fill = TXT_class)) + 
+  geom_boxplot() + 
+  xlab("") + ggtitle("OC (%) across texture classes") +
+  geom_text(aes(label = outlier), na.rm = TRUE, nudge_y = 0.05) 
+
+
+labdata %>%
+  ggplot(aes(x = TXT_class, y = OC, fill = TXT_class)) + 
+  geom_boxplot()
+
+
+
 
