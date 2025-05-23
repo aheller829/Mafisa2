@@ -174,6 +174,12 @@ plantcover <- plantcover %>%
 # write.csv(plantnames, "L1/plantnames_unedited.csv", row.names = FALSE)
 # Read in edited plant names and join to table
 plantnames <- read.csv("L1/plantnames.csv")
+plantsdistinct <- plantnames %>%
+  dplyr::select(PlantNameEdited) %>%
+  distinct()
+plantsdistinct$SP <- grep("\\bsp\\b", plantsdistinct$PlantNameEdited, value=TRUE)
+
+
 
 unique(plantnames$FG)
 plantcover <- plantcover %>%

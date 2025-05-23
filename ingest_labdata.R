@@ -14,8 +14,8 @@ setwd(dir)
 
 
 # Level one lab data
-labdata <- excel_sheets("L1/20250513_LabSamples_L1.xlsx") # File path
-labdata_list <- lapply(labdata, function(x) read_excel("L1/20250513_LabSamples_L1.xlsx", sheet = x))  # Read excel file into list of excel sheets
+labdata <- readxl::excel_sheets("L1/20250519_LabSamples_L1.xlsx") # File path
+labdata_list <- lapply(labdata, function(x) read_excel("L1/20250519_LabSamples_L1.xlsx", sheet = x))  # Read excel file into list of excel sheets
 names(labdata_list) <- labdata # Pull sheet names
 list2env(labdata_list, envir=.GlobalEnv) # Write each excel sheet to a separate dataframe 
 
@@ -24,6 +24,9 @@ list2env(labdata_list, envir=.GlobalEnv) # Write each excel sheet to a separate 
 soilbiomass <- read.csv("L2/Mafisa2_SoilBiomass_L2.csv")
 cover <- read.csv("L1/plot_cover_photos.csv")
 cover <- dplyr::select(cover, SoilPlot = Plot.Name, Class = Class.1)
+
+
+
 
 
 ### Clean SOC table
@@ -43,7 +46,7 @@ SOC_clean <- dplyr::mutate(SOC_clean, SOC1_depth = ifelse(is.na(SOC1_depth), SOC
 SOC_clean <- dplyr::select(SOC_clean, -SOC_depth_lab)
 SOC_clean <- dplyr::distinct(SOC_clean)
 # Save to csv
-write.csv(SOC_clean, "L1/Mafisa2_OrganicCarbon_L1.1.csv", row.names = FALSE)
+# write.csv(SOC_clean, "L2/Mafisa2_OrganicCarbon_L2.csv", row.names = FALSE)
 
 
 # Create histogram of C values
@@ -77,7 +80,7 @@ TXT_clean <- SoilTexture %>%
 TXT_clean <- dplyr::select(TXT_clean, SoilPlot, Sand_pct, Clay_pct, Silt_pct, TXT_class)
 TXT_clean <- dplyr::distinct(TXT_clean)
 # Write to csv
-write.csv(TXT_clean, "L1/Mafisa2_SoilTexture_L1.1.csv", row.names = FALSE)
+# write.csv(TXT_clean, "L2/Mafisa2_SoilTexture_L2.csv", row.names = FALSE)
 
 
 # Create histogram of C values
@@ -168,7 +171,7 @@ fieldbd <- soilbiomass %>%
   dplyr::left_join(bd_clean)
 # Check if any wtd weights are different by plot
 wtd_qc <- dplyr::filter(fieldbd, WTD_mass != BD_field_weight)
-# Five plots have mismatched weights: LU08, SS04, SS19, SS13, SSN10 
+# Four plots have mismatched weights: LU08, NLO08, NLO19, SS13
 
 # Replace missing wtd weights and depths from soilbiomass field data
 names(fieldbd)
@@ -179,7 +182,7 @@ bd_clean <- fieldbd %>%
 bd_clean <- dplyr::distinct(bd_clean)
 
 
-write.csv(bd_clean, "L1/Mafisa2_BulkDensity_L1.1.csv", row.names = FALSE)
+# write.csv(bd_clean, "L2/Mafisa2_BulkDensity_L2.csv", row.names = FALSE)
 
 names(bd_clean)
 # Create histogram of BD values
@@ -194,10 +197,10 @@ bd
 
 
 ### Clean herb bio table
-names(BiomassHerbacious)
+names(BiomassHerbaceous)
 names(soilbiomass)
 # Cross reference values with field data
-herbbio_clean <- BiomassHerbacious %>%
+herbbio_clean <- BiomassHerbaceous %>%
   dplyr::mutate(SoilPlot = str_replace_all(SoilPlot, fixed(" "), ""), # Remove white spaces from plot names
                 District = ifelse(str_detect(SoilPlot, "LU[:digit:]"), "Kanguya",
                                   ifelse(str_detect(SoilPlot, "NLO[:digit:]"), "Mombola",
@@ -249,7 +252,7 @@ herbbio_clean <- herbbio_clean %>%
 
 herbbio_clean <- dplyr::distinct(herbbio_clean)
 # Save to csv
-write.csv(herbbio_clean, "L1/Mafisa2_HerbaceousBiomass_L1.1.csv", row.names = FALSE)
+# write.csv(herbbio_clean, "L2/Mafisa2_HerbaceousBiomass_L2.csv", row.names = FALSE)
 
 
 
@@ -318,21 +321,28 @@ woodybio_clean <- woodybio_clean %>%
 
 woodybio_clean <- dplyr::distinct(woodybio_clean)
 # Save to csv
-write.csv(woodybio_clean, "L1/Mafisa2_WoodyBiomass_L1.1.csv", row.names = FALSE)
+# write.csv(woodybio_clean, "L2/Mafisa2_WoodyBiomass_L2.csv", row.names = FALSE)
+
+
+
 
 
 # Derive bulk density
 names(soilbiomass)
 fullbd <- dplyr::select(soilbiomass, SoilPlot, BD_wet_mass_total, BD_frag_vol) # Extract weights for full BD cores
-fullbd <- fullbd[-c(52), ]
+fullbd <- dplyr::mutate(fullbd, BD_frag_vol = ifelse(is.na(BD_frag_vol), 0, BD_frag_vol))
 
 names(bd_clean)
 names(fullbd)
 
+# Calculate radius of auger based on volume
+sqrt(7300/(100*pi))
+
+
 bd_clean <- bd_clean %>%
   dplyr::left_join(fullbd) %>% # Join full core weights to lab bd
   dplyr::mutate(TotalBDDryWeight = (BD_dry_weight/BD_field_weight)*BD_wet_mass_total) %>% # Calculate dry weight of full core
-  dplyr::mutate(BDCoreVolume = 4.2^2*pi*BD_depth) %>% # Add core volume in cm ^ 3
+  dplyr::mutate(BDCoreVolume = 4.82^2*pi*BD_depth) %>% # Add core volume in cm ^ 3
   dplyr::mutate(BD_frag_vol = ifelse(is.na(BD_frag_vol), 0, BD_frag_vol)) %>% # Fill missing fragment measurements 
   dplyr::mutate(WholeCoreBD = TotalBDDryWeight/(BDCoreVolume - BD_frag_vol)) # Calculate bulk density
   
@@ -351,23 +361,61 @@ bd_clean <- dplyr::select(bd_clean, SoilPlot, District, BD_depth, WTD_BD_field_w
 
 
 
-names(bd_clean)
-names(labdata_ogSWC)
-
 bd_compare <- labdata_ogSWC %>%
   dplyr::select(SoilPlot, BD_fullcore_dry_weight_OG = BD_fullcore_dry_weight, BD_g_cm3_OG = BD_g_cm3, SOC_density_OG = SOC_density) %>%
   dplyr::left_join(bd_clean) %>%
   dplyr::select(SoilPlot, BD_fullcore_dry_weight_OG, BD_fullcore_dry_weight, BD_g_cm3_OG, BD_g_cm3, SOC_density_OG, SOC_density)
 
+
+# Standardize biomass
+names(herbbio_clean)
+# Recalculate weights as sums rather than averages
+freshweights <- herbbio_clean %>%
+  dplyr::select(SoilPlot, District, HerbLabFreshWeight1, 
+                HerbLabFreshWeight2, HerbLabFreshWeight3, HerbLabFreshWeight4) %>%
+  tidyr::gather(Instance, Weight, HerbLabFreshWeight1:HerbLabFreshWeight4) %>%
+  dplyr::group_by(SoilPlot) %>%
+  dplyr::summarise(FreshWeightSum = sum(Weight, na.rm = TRUE)) 
+
+dryweights <- herbbio_clean %>%
+  dplyr::select(SoilPlot, District, HerbLabDryWeight1, 
+                HerbLabDryWeight2, HerbLabDryWeight3, HerbLabDryWeight4) %>%
+  tidyr::gather(Instance, Weight, HerbLabDryWeight1:HerbLabDryWeight4) %>%
+  dplyr::group_by(SoilPlot) %>%
+  dplyr::summarise(DryWeightSum = sum(Weight, na.rm = TRUE)) 
+
+joinedweights <- dplyr::left_join(freshweights, dryweights)
+# Calculate moisture content
+joinedweights$HerbMoistureContent <- ((joinedweights$FreshWeightSum-joinedweights$DryWeightSum)/joinedweights$DryWeightSum)*100
+# Calculate percent dry matter
+joinedweights$HerbDryMatterPct <- (joinedweights$DryWeightSum/joinedweights$FreshWeightSum)*100
+
+
 ### Join tables and write as L2
+# RM district where present, so tables are only joining on SoilPlot
+names(SOC_clean)
+SOC_clean <- dplyr::select(SOC_clean, -District, -Date)
+names(TXT_clean)
+names(herbbio_clean)
+herbbio_clean <- dplyr::select(herbbio_clean, -District)
+names(woodybio_clean)
+woodybio_clean <- dplyr::select(woodybio_clean, -District)
+
 labdata <- bd_clean %>%
   dplyr::left_join(SOC_clean) %>%
   dplyr::left_join(TXT_clean) %>%
   dplyr::left_join(herbbio_clean) %>%
   dplyr::left_join(woodybio_clean)
+labdata <- labdata %>%
+  dplyr::mutate(
+                District = ifelse(str_detect(SoilPlot, "LU[:digit:]"), "Kanguya",
+                                  ifelse(str_detect(SoilPlot, "NLO[:digit:]"), "Mombola",
+                                         ifelse(str_detect(SoilPlot, "SSN[:digit:]"), "Senanga",
+                                                ifelse(str_detect(SoilPlot, "SS[:digit:]"), "Mutala", NA))))) # Add district name
 
 
-write.csv(labdata, "L2/Mafisa2_LabData_L2.csv", row.names = FALSE)
+
+write.csv(labdata, "L3/Mafisa2_LabData_joined_L3.csv", row.names = FALSE)
 
 
 

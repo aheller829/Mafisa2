@@ -6,16 +6,15 @@ library(vegan)
 library(indicspecies)
 
 # Set working directory
-dir <- "C:/Users/allie.heller/OneDrive - Biodiversity Research Institute/Desktop/Mafisa 2 Data/L1/"
+dir <- "C:/Users/allie.heller/OneDrive - Biodiversity Research Institute/Desktop/Mafisa 2 Data/"
 setwd(dir)
 
 # Read in L1.1 data
-soilbiomass <- read.csv("Mafisa2_SoilBiomass_L1.1.csv")
-dbh <- read.csv("Mafisa_2_dbh_20250505.csv")
-gctable <- read.csv("Mafisa2_GC_L1.1.csv")
-vegtable <- read.csv("Mafisa2_Veg2x2_BD_L1.1.csv")
-presence <- read.csv("Mafisa2_SpeciesPresence_L1.1.csv")
-spwide <- read.csv("Mafisa2_topspecieswide_L1.1.csv")
+soilbiomass <- read.csv("L2/Mafisa2_SoilBiomass_L2.csv")
+dbh <- read.csv("L2/Mafisa2_DBH_L2.csv")
+gctable <- read.csv("L2/Mafisa2_GC_L2.csv")
+vegtable <- read.csv("L2/Mafisa2_Veg2x2_BD_L2.csv")
+
 
 # Replace densi NA with 0
 soilbiomass <- dplyr::mutate(soilbiomass , DensiCanopyCover = ifelse(is.na(DensiCanopyCover), 0, DensiCanopyCover))
@@ -34,8 +33,9 @@ classes <- cover %>%
   dplyr::group_by(Community, GoogleEarthClass.1) %>%
   dplyr::summarize(Count = n())
 
+
 # Read in plot cover class
-cover <- read.csv("plot_cover_photos.csv")
+cover <- read.csv("L1/plot_cover_photos.csv")
 cover <- dplyr::rename(cover, SoilPlot = Plot.Name)
 
 
@@ -72,21 +72,17 @@ varjoin <- dplyr::mutate(varjoin, bare_ground = ifelse(SoilPlot == "SS05", 40, b
 
 
 
-
-
-
-
-
-
-
 # Subset for ordination
 names(varjoin)
-analysis.table <- varjoin %>%
-  dplyr::select(SoilPlot, ID, AnnualForb:Shrub, DensiCanopyCover, TotalFoliar, bare_ground,
-                TreeCount, MeanDBH, LargeGaps, MeanHeight, Class = GoogleEarthClass.2) 
+# analysis.table <- varjoin %>%
+ #  dplyr::select(SoilPlot, ID, AnnualForb:Shrub, DensiCanopyCover, TotalFoliar, bare_ground,
+               #  TreeCount, MeanDBH, LargeGaps, MeanHeight, Class = GoogleEarthClass.1) 
+
+analysis.table <- dplyr::select(varjoin, SoilPlot, ID, DRH_pct, SRH_pct, BARE_pct)
+
 
 # Remove nominal/categorical variables
-fg.foliar <- dplyr::select(analysis.table, -SoilPlot, -ID, -Class)
+fg.foliar <- dplyr::select(analysis.table, -SoilPlot, -ID)
 
 # Look for NAs
 nas <- dplyr::filter_all(fg.foliar, any_vars(is.na(.)))
@@ -96,7 +92,7 @@ nas <- dplyr::filter_all(fg.foliar, any_vars(is.na(.)))
 fg.foliar <- na.omit(fg.foliar)
 str(fg.foliar)
 # Convert to a bray-curtis dissimilarity matrix
-fg.foliar.dist <- vegan::vegdist(fg.foliar, method = "gower")
+fg.foliar.dist <- vegan::vegdist(fg.foliar, method = "bray")
 # Run a PCoA on functional groups and structural indicators
 vegPCA <- cmdscale(fg.foliar.dist, k = 2)
 # View ordination
@@ -135,7 +131,7 @@ par(mfrow=c(1,1))
 # Start with number of clusters indicated by cluster metrics (k)
 # Adjust fuzziness/crispness with membership exponent approaching 2 for fuzzier classification
 library(cluster)
-veg.fanny <- fanny(fg.foliar.dist, k = 3, memb.exp = 1.2, maxit = 1000, keep.diss = TRUE)
+veg.fanny <- fanny(fg.foliar.dist, k = 4, memb.exp = 1.2, maxit = 1000, keep.diss = TRUE)
 # Display's Dunn's partition coefficient (low coeff = very fuzzy, near 1 = crisp)
 veg.fanny$coeff
 # Build a dataframe of membership values
@@ -182,7 +178,7 @@ plot(fit, p.max = 0.05, col = "blue")
 # Assign plots to clusters by top membership value
 topmems <- fanny.mems %>%
   mutate(ID = rownames(fanny.mems)) %>%
-  gather(Cluster, MemVal, V1:V3) %>%
+  gather(Cluster, MemVal, V1:V4) %>%
   group_by(ID) %>%
   arrange(MemVal) %>%
   slice(which.max(MemVal)) %>%
@@ -192,7 +188,11 @@ str(analysis.table)
 topmems$ID <- as.numeric(topmems$ID)
 topmems<- inner_join(topmems, analysis.table)
 names(topmems)
-topmems <- dplyr::select(topmems, ID, Cluster, MemVal, Class, SoilPlot, AnnualForb:MeanHeight)
+topmems <- dplyr::select(topmems, ID, Cluster, MemVal, SoilPlot, DRH_pct:BARE_pct)
+
+# Write to csv
+write.csv(topmems, "C:\\Users\\allie.heller\\OneDrive - Biodiversity Research Institute\\Desktop\\Analysis\\Mafisa2\\Outputs\\fg_clusters.csv", row.names = FALSE)
+
 
 
 # Rename clusters
@@ -216,7 +216,7 @@ topmem.summary <- topmem.summary %>%
 # Boxplots of indicators by cluster
 names(topmems)
 topmems %>%
-  ggplot(aes(x = Cluster, y = Tree_densi, fill = Cluster)) +
+  ggplot(aes(x = Cluster, y = LargeGaps, fill = Cluster)) +
   geom_boxplot() +
   theme(
     legend.position="none",
@@ -233,14 +233,37 @@ topmems %>%
 library(rpart)
 library(rpart.plot)
 # Join fgs to topmems
-names(analysis.table)
-treevars <- dplyr::select(analysis.table, Class, AnnualForb:PerennialGrass, TotalFoliar, bare_ground)
-treevars <- dplyr::rename(treevars, TreeCover = DensiCanopyCover)
+names(topmems)
+treevars <- dplyr::select(topmems, Cluster, DRH_pct:BARE_pct)
+# treevars <- dplyr::rename(treevars, TreeCover = DensiCanopyCover)
 
-tree <- rpart::rpart(Class ~., data = treevars, method = "class")
+tree <- rpart::rpart(Cluster ~., data = treevars, method = "class")
 tree
 
 rpart.plot::rpart.plot(tree, extra = 101)
+
+# Rename clusters and join to lab data
+# Test how manual classification is different
+topmems <- dplyr::mutate(topmems, Vegclass = ifelse(BARE_pct > 70, "Bare",
+                                                    ifelse(DRH_pct > 60, "Perennial",
+                                                           ifelse(SRH_pct > 60, "Annuals",
+                                                                  ifelse(DRH_pct < 60 & DRH_pct > 30, "Mixture", NA)))))
+
+topmems <- dplyr::mutate(topmems, VegClass = ifelse(Cluster == "V1", "Perennial",
+                                                    ifelse(Cluster == "V2", "Bare",
+                                                           ifelse(Cluster == "V3", "Annuals", "Mixture"))))
+
+vegclass <- dplyr::select(topmems, SiteLabel = SoilPlot, VegClass)
+
+snap <- read.csv("L3/Mafisa2_SNAPGRAZE_format_csv.csv")
+names(snap)
+snap <- snap %>%
+  dplyr::select(-VegClass) %>%
+  dplyr::left_join(vegclass) %>%
+  dplyr::select(Project:EstimatedPercentSand, VegClass, photo_no_north:SOC_density)
+
+# Write to csv
+write.csv(snap, "L3/Mafisa2_SNAPGRAZE_QuantVegClass.csv", row.names = FALSE)
 
 
 
@@ -248,14 +271,29 @@ rpart.plot::rpart.plot(tree, extra = 101)
 names(varjoin)
 
 sp <- varjoin %>%
-  dplyr::filter(SoilPlot != "SS04") %>%
-  dplyr::select(Abrus.pulchellus.:Xylopia.odoratissima)
+  dplyr::select(Abrus.pulchellus:Xylopia.odoratissima)
 
 class <- varjoin %>%
-  dplyr::filter(SoilPlot != "SS04") %>%
-  dplyr::select(GoogleEarthClass.2)
+  dplyr::select(GoogleEarthClass.1)
 
-inv <- indicspecies::multipatt(sp, class$GoogleEarthClass.2)
+inv <- indicspecies::multipatt(sp, class$GoogleEarthClass.1)
+
+summary(inv)
+
+
+# By district
+varjoin <- varjoin %>%
+  dplyr::left_join(district) %>%
+  tidyr::unite(HabitatDistrict, c("District", "GoogleEarthClass.1"), sep = "_", rm = FALSE)
+
+
+sp <- varjoin %>%
+  dplyr::select(Abrus.pulchellus:Xylopia.odoratissima)
+
+class <- varjoin %>%
+  dplyr::select(HabitatDistrict)
+
+inv <- indicspecies::multipatt(sp, class$HabitatDistrict)
 
 summary(inv)
 
@@ -263,11 +301,90 @@ summary(inv)
 
 
 
+# Read in lab data and explore carbon by cluster
+
+labdata <- read.csv("L3/Mafisa2_LabData_joined_L3.csv")
+
+snap <- read.csv("L3/Mafisa2_SNAPGRAZE_format_csv.csv")
+
+join <- dplyr::left_join(topmems, labdata)
+join <- dplyr::left_join(join, cover)
+
+# How many of each cluster per class
+covertable <- join %>%
+  dplyr::group_by(GoogleEarthClass.1, Cluster) %>%
+  dplyr::summarise(Count = n())
+
+
+
+
+
+# Boxplots of indicators by cluster
+names(join)
+join %>%
+  ggplot(aes(x = GoogleEarthClass.2, y = SOC_density, fill = GoogleEarthClass.2)) +
+  geom_boxplot() +
+  theme(
+    legend.position="none",
+    plot.title = element_text(size=11)
+  ) +
+  xlab("")
+
+
+
+
+
+# Calculate additional biodiversity metrics
+varjoin <- varjoin %>%
+  dplyr::mutate(
+    District = ifelse(str_detect(SoilPlot, "LU[:digit:]"), "Kanguya",
+                      ifelse(str_detect(SoilPlot, "NLO[:digit:]"), "Mombola",
+                             ifelse(str_detect(SoilPlot, "SSN[:digit:]"), "Senanga",
+                                    ifelse(str_detect(SoilPlot, "SS[:digit:]"), "Mutala", NA))))) # Add district name
+
+varjoin$District <- factor(varjoin$District, levels = c("Mutala", "Mombola", "Senanga", "Kanguya"))
+
+varjoin <- dplyr::left_join(varjoin, labdata)
+env <- dplyr::select(snap, SoilPlot = SiteLabel, MeanAnnualRainfall_mm, MeanAnnualTemperature_C, EstimatedPercentSand, SOC_percent)
+varjoin <- dplyr::left_join(varjoin, env)
+# Calculate shannon diversity# Calculenvate shannon diversity
+names(varjoin)
+varjoin$Shannon <- vegan::diversity(sp, index = "shannon")
+varjoin$PielouJ <- varjoin$Shannon/log(varjoin$SpeciesRichness)
+min(varjoin$PielouJ)
+max(varjoin$PielouJ)
+
+ggplot(varjoin, aes(x = SpeciesRichness, y = MeanAnnualRainfall_mm)) +
+  geom_point()
+
+varjoin <- dplyr::left_join(varjoin, district)
+varjoin$District <- factor(varjoin$District, levels = c("Mutala", "Mombola", "Senanga", "Kanguya"))
+
+varjoin %>%
+  ggplot(aes(x = GoogleEarthClass.1, y = SpeciesRichness, fill = GoogleEarthClass.1)) +
+  geom_boxplot() +
+  xlab("") +
+  ylab("Species richness") +
+  theme_minimal() +
+  theme(legend.position="none") +
+  facet_wrap(~District)
+
+
+
+
+# BIOENV
+str(fg.foliar)
+str(env)
+env <- dplyr::select(env, -SoilPlot)
+vegan::bioenv(sp, env)
+# Low correlation
+
+
+
 
 
 
 # Turn into a kml for google earth
-topmems <- topmems[-c(50), ]
 xy <- dplyr::select(soilbiomass, SoilPlot, x, y)
 topmems <- dplyr::left_join(topmems, xy)
 

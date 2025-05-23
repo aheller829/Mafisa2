@@ -17,8 +17,6 @@ setwd(dir)
 ### Read in L2 Mafisa 2 data
 soilbiomass <- read.csv("L2/Mafisa2_SoilBiomass_L2.csv")
 
-soilbiomass <- soilbiomass[-c(42), ]
-
 ### Get polygon of Zambia country boundary
 world <- rworldmap::getMap(resolution = "low")
 class(world)
@@ -119,7 +117,7 @@ names(soilbiomass)
 
 
 # Read in lab data and join
-labdata <- read.csv("L2/Mafisa2_labdata_L2.csv")
+labdata <- read.csv("L3/Mafisa2_LabData_joined_L3.csv")
 names(labdata)
 
 l3soil <- soilbiomass %>%
