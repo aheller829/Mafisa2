@@ -389,6 +389,38 @@ joinedweights <- dplyr::left_join(freshweights, dryweights)
 joinedweights$HerbMoistureContent <- ((joinedweights$FreshWeightSum-joinedweights$DryWeightSum)/joinedweights$DryWeightSum)*100
 # Calculate percent dry matter
 joinedweights$HerbDryMatterPct <- (joinedweights$DryWeightSum/joinedweights$FreshWeightSum)*100
+# Rename
+herbjoinedweights <- dplyr::select(joinedweights, SoilPlot, HerbFreshWeightSum = FreshWeightSum, HerbDryWeightSum = DryWeightSum, 
+                                   HerbMoistureContent, HerbDryMatterPct)
+# Repeat for woody
+freshweights <- woodybio_clean %>%
+  dplyr::select(SoilPlot, District, WoodyLabFreshWeight1, 
+                WoodyLabFreshWeight2, WoodyLabFreshWeight3, WoodyLabFreshWeight4) %>%
+  tidyr::gather(Instance, Weight, WoodyLabFreshWeight1:WoodyLabFreshWeight4) %>%
+  dplyr::group_by(SoilPlot) %>%
+  dplyr::summarise(FreshWeightSum = sum(Weight, na.rm = TRUE)) 
+
+dryweights <- woodybio_clean %>%
+  dplyr::select(SoilPlot, District, WoodyLabDryWeight1, 
+                WoodyLabDryWeight2, WoodyLabDryWeight3, WoodyLabDryWeight4) %>%
+  tidyr::gather(Instance, Weight, WoodyLabDryWeight1:WoodyLabDryWeight4) %>%
+  dplyr::group_by(SoilPlot) %>%
+  dplyr::summarise(DryWeightSum = sum(Weight, na.rm = TRUE)) 
+
+joinedweights <- dplyr::left_join(freshweights, dryweights)
+# Calculate moisture content
+joinedweights$WoodyMoistureContent <- ((joinedweights$FreshWeightSum-joinedweights$DryWeightSum)/joinedweights$DryWeightSum)*100
+# Calculate percent dry matter
+joinedweights$WoodyDryMatterPct <- (joinedweights$DryWeightSum/joinedweights$FreshWeightSum)*100
+# Rename
+woodyjoinedweights <- dplyr::select(joinedweights, SoilPlot, WoodyFreshWeightSum = FreshWeightSum, WoodyDryWeightSum = DryWeightSum, 
+                                    WoodyMoistureContent, WoodyDryMatterPct)
+# Join herb and woody
+joinedweights <- dplyr::left_join(herbjoinedweights, woodyjoinedweights)
+# Replace woody NA with 0
+joinedweights <- dplyr::mutate_all(joinedweights, ~replace(., is.na(.), 0))
+# Save to csv
+write.csv(joinedweights, "L2/Mafisa2_Biomass_recalc.csv", row.names = FALSE)
 
 
 ### Join tables and write as L2
