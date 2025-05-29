@@ -146,3 +146,48 @@ l3soil <- soilbiomass %>%
 
 # Write to csv
 write.csv(l3soil, "L3/Mafisa2_SNAPGRAZE_format.csv", row.names = FALSE)
+
+
+
+
+# Report edits
+snap <- read.csv("L3/Mafisa2_SNAPGRAZE_format_csv.csv")
+snap_cluster <- read.csv("L3/Mafisa2_SNAPGRAZE_QuantVegClass.csv")
+soilbiomass <- read.csv("L2/Mafisa2_SoilBiomass_L2.csv")
+# Adding total bd try weight from bd_clean calculations (ingest_labdata.R)
+# Also tree canopy cover
+# Also veg class
+dry <- dplyr::select(bd_clean, SiteLabel = SoilPlot, TotalBDDryWeight)
+
+vegclass <- dplyr::select(cover, SiteLabel = SoilPlot, VegClass = GoogleEarthClass.1)
+
+clusters <- dplyr::select(snap_cluster, SiteLabel, VegClass_cluster = VegClass)
+
+canopy <- dplyr::select(soilbiomass, SiteLabel = SoilPlot, Tree_pct_cover = TREE_pct)
+
+roots <- dplyr::select(soilbiomass, SiteLabel = SoilPlot, Root_depth_cm = RootPit_depth)
+
+labbio <- dplyr::rename(joinedweights, SiteLabel = SoilPlot)
+
+# Join
+snap <- snap %>%
+  dplyr::select(-VegClass) %>%
+  dplyr::left_join(dry) %>%
+  dplyr::left_join(vegclass) %>%
+  dplyr::left_join(clusters) %>%
+  dplyr::left_join(canopy)
+names(snap)
+snap <- dplyr::select(snap, Project:BD_wet_mass_total_g, BD_dry_mass_total_g = TotalBDDryWeight, BD_rock_volume_ml:EstimatedPercentSand,
+                      VegClass, VegClass_cluster, Tree_pct_cover, photo_no_north:SOC_density)
+
+
+snap <- snap %>%
+  dplyr::left_join(roots) %>%
+  dplyr::left_join(labbio)
+
+
+fgroups <- dplyr::select(soilbiomass, )
+
+
+# Save to csv
+write.csv(snap, "L3/Mafisa2_SNAPGRAZE_format_csv.csv", row.names = FALSE)

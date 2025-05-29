@@ -419,6 +419,21 @@ woodyjoinedweights <- dplyr::select(joinedweights, SoilPlot, WoodyFreshWeightSum
 joinedweights <- dplyr::left_join(herbjoinedweights, woodyjoinedweights)
 # Replace woody NA with 0
 joinedweights <- dplyr::mutate_all(joinedweights, ~replace(., is.na(.), 0))
+
+# Area conversions
+# First add transect lengths
+tlength <- dplyr::select(soilbiomass, SoilPlot, WoodyBio_length, HerbBio_length)
+# Convert to m area 
+tlength <- dplyr::mutate(tlength, 
+                         WoodyArea_m = WoodyBio_length*0.1,
+                         HerbArea_m = HerbBio_length*0.1)
+
+joinedweights <- dplyr::left_join(joinedweights, tlength)
+
+
+
+
+
 # Save to csv
 write.csv(joinedweights, "L2/Mafisa2_Biomass_recalc.csv", row.names = FALSE)
 

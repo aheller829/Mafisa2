@@ -9,6 +9,8 @@ library(rpart)
 library(rpart.plot)
 library(PerformanceAnalytics)
 library(ggridges)
+library(gt)
+library(gtsummary)
 
 # Read in data
 dir <- "C:/Users/allie.heller/OneDrive - Biodiversity Research Institute/Desktop/Mafisa 2 Data/"
@@ -143,6 +145,21 @@ ggplot(labdata, aes(x = SOC_density)) +
 
 
 
+
+#### Bio plots
+joinedweights <- dplyr::left_join(joinedweights, district)
+joinedweights <- dplyr::left_join(joinedweights, cover)
+
+joinedweights %>%
+  dplyr::filter(HerbDryMatterPct < 100) %>%
+  ggplot(aes(y = HerbDryMatterPct, x = GoogleEarthClass.1, fill = GoogleEarthClass.1)) + 
+  geom_boxplot() + 
+  xlab("") + ggtitle("Woody biomass across ecosystem types") +
+  theme_minimal() +
+  theme(legend.position = "none",
+        axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=1)) +
+  ylab("Woody biomass dry matter (%)") +
+  coord_cartesian(ylim = c(0, 100)) 
 
 
 
@@ -311,10 +328,13 @@ biomass_sum <- dbh %>%
   dplyr::summarise(AGB_mass_kg_per_plot = sum(AGB),
                    BGB_mass_kg_per_plot = sum(BGB),
                    AGB_c_per_plot = sum(AGB_c_pertree),
-                   BGB_c_per_plot = sum(BGB_c_pertree))
+                   BGB_c_per_plot = sum(BGB_c_pertree),
+                   Density_ha = mean(Density_ha))
 
 # Scale up from plot to ha
 biomass_sum <- dplyr::mutate(biomass_sum, 
+                             AGB_mass_tons_plot = AGB_mass_kg_per_plot/1000,
+                             BGB_mass_tons_plot = BGB_mass_kg_per_plot/1000,
                              AGB_mass_tons_ha = (AGB_mass_kg_per_plot*7.957747)/1000,
                              BGB_mass_tons_ha = (BGB_mass_kg_per_plot*7.957747)/1000,
                              AGB_C_tons_ha = (AGB_c_per_plot*7.957747)/1000,
@@ -326,13 +346,107 @@ biomass_sum <- dplyr::left_join(biomass_sum, district)
 # Summarize by district
 biomass.summary.district <- biomass_sum %>%
   dplyr::group_by(District) %>%
-  dplyr::summarise(
+  dplyr::summarise(Mean_tree_density_ha = mean(Density_ha),
+                   SD_tree_density_ha = sd(Density_ha),
                    Mean_AGBstocks_tons_ha = mean(AGB_mass_tons_ha),
+                   SD_AGBstocks_tons_ha = sd(AGB_mass_tons_ha),
                    Mean_BGBstocks_tons_ha = mean(BGB_mass_tons_ha),
+                   SD_BGBstocks_tons_ha = sd(BGB_mass_tons_ha),
                    Mean_AGB_c_tons_ha = mean(AGB_C_tons_ha),
-                   Mean_BGB_c_tons_ha = mean(BGB_C_tons_ha)) %>%
+                   SD_AGB_c_tons_ha = sd(AGB_C_tons_ha),
+                   Mean_BGB_c_tons_ha = mean(BGB_C_tons_ha),
+                   SD_BGB_c_tons_ha = sd(BGB_C_tons_ha)) %>%
   dplyr::mutate_if((is.numeric), ~ round(., 3))
   
+# Make GT Table
+biomass_tab <- dplyr::select(biomass_sum, -SoilPlot, -AGB_mass_kg_per_plot, -BGB_mass_kg_per_plot,
+                             -AGB_mass_tons_plot, -BGB_mass_tons_plot,
+                             "Tree density (ha)" = Density_ha,
+                             -AGB_c_per_plot, -BGB_c_per_plot, "AGB (t/ha)" = AGB_mass_tons_ha, "BGB (t/ha)" = BGB_mass_tons_ha,
+                             "AGB carbon stocks (t/ha)" = AGB_C_tons_ha, "BGB carbon stocks (t/ha)" = BGB_C_tons_ha)
+
+biomass_tab$District <- factor(biomass_tab$District, levels = c("Mutala", "Mombola", "Senanga", "Kanguya"))
+
+tab <- gtsummary::tbl_summary(biomass_tab, by = District,
+                              type = where(is.numeric) ~ "continuous",
+                              statistic = all_continuous() ~ "{mean} ± {sd}",
+                              digits = everything() ~ 1,
+                              label = "Tree density (ha)" ~ "Tree density (ha<sup>-1</sup>)")
+tab
+tab <- gtsummary::modify_header(tab, label = "**Measurement**")
+tab <- tab %>%
+  gtsummary::as_gt() %>%
+  gt::fmt_markdown(columns = vars(label))
+tab
+gt::gtsave(tab, path = "C:\\Users\\allie.heller\\OneDrive - Biodiversity Research Institute\\Desktop\\Mafisa 2 Report\\Figures", filename = "biomass.png", vwidth = 1500, vheight = 1000)
+
+
+# Create plots
+names(biomass_sum)
+ggplot(biomass_sum, aes(y = BGB_C_tons_ha, x = District, fill = District)) + 
+  geom_boxplot() + 
+  xlab("") + ggtitle("Aboveground woody biomass across project areas") +
+  theme_minimal() +
+  theme(legend.position = "none",
+        axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=1)) +
+  ylab("Tons/ha")  + 
+  ggpubr::stat_compare_means(size = 3)
+
+
+# Kruskal test
+kruskal.test(AGB_C_tons_ha ~ District, data = biomass_sum)
+
+
+
+
+
+
+
+# Gather for paired boxplot
+names(biomass_sum)
+biomass_tall <- biomass_sum %>%
+  tidyr::gather(Measurement, Value, 2:11) %>%
+  dplyr::select(SoilPlot, District, Measurement, Value)
+biomass_tall$District <- factor(biomass_tall$District, levels = c("Mutala", "Mombola", "Senanga", "Kanguya"))
+# Paired boxplot, tons of biomass per plot
+biomass_tall %>%
+  dplyr::filter(Measurement == "AGB_mass_tons_plot" | Measurement == "BGB_mass_tons_plot") %>%
+  ggplot(aes(y = Value, x = District, fill = Measurement)) + 
+  geom_boxplot() + 
+  xlab("") + ggtitle("Woody biomass across project areas") +
+  theme_minimal() +
+  scale_fill_hue(labels = c("Aboveground woody biomass", "Belowground woody biomass")) +
+  theme(legend.title = element_blank(),
+        axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=1)) +
+  ylab("Biomass (tons) per plot") + 
+  ggpubr::stat_compare_means(size = 3)
+
+# Paired boxplot, biomass tons per hectare
+biomass_tall %>%
+  dplyr::filter(Measurement == "AGB_mass_tons_ha" | Measurement == "BGB_mass_tons_ha") %>%
+  ggplot(aes(y = Value, x = District, fill = Measurement)) + 
+  geom_boxplot() + 
+  xlab("") + ggtitle("Woody biomass across project areas") +
+  theme_minimal() +
+  scale_fill_hue(labels = c("Aboveground woody biomass", "Belowground woody biomass")) +
+  theme(legend.title = element_blank(),
+        axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=1)) +
+  ylab("Biomass (tons/ha)") 
+# Paired boxplot, c tons per hectare
+biomass_tall %>%
+  dplyr::filter(Measurement == "AGB_C_tons_ha" | Measurement == "BGB_C_tons_ha") %>%
+  ggplot(aes(y = Value, x = District, fill = Measurement)) + 
+  geom_boxplot() + 
+  xlab("") + ggtitle("Woody carbon stocks across project areas") +
+  theme_minimal() +
+  scale_fill_hue(labels = c("Aboveground biomass C stocks", "Belowground biomass C stocks")) +
+  theme(legend.title = element_blank(),
+        axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=1)) +
+  ylab("C (tons/ha)") 
+
+
+
+
 
 
 
