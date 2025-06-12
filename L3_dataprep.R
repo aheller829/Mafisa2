@@ -186,7 +186,12 @@ snap <- snap %>%
   dplyr::left_join(labbio)
 
 
-fgroups <- dplyr::select(soilbiomass, )
+biomassrecalc <- dplyr::select(joinedweights, SiteLabel = SoilPlot, HerbDryWeight_kg_ha, WoodyDryWeight_kg_ha)
+
+names(snap)
+
+snap <- dplyr::left_join(snap, biomassrecalc)
+
 
 
 # Save to csv

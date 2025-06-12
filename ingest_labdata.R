@@ -430,7 +430,21 @@ tlength <- dplyr::mutate(tlength,
 
 joinedweights <- dplyr::left_join(joinedweights, tlength)
 
+# Divide fractional areas by fraction to upscale to 1 m
+names(joinedweights)
+joinedweights <- dplyr::mutate(joinedweights, HerbDryWeight_m = HerbDryWeightSum/HerbArea_m,
+                               WoodyDryWeight_m = WoodyDryWeightSum/WoodyArea_m)
 
+joinedweights <- dplyr::select(joinedweights, SoilPlot, HerbFreshWeightSum, HerbMoistureContent, HerbDryMatterPct,
+                               WoodyFreshWeightSum, WoodyMoistureContent, WoodyDryMatterPct, HerbBio_length, WoodyBio_length,
+                               HerbArea_m, WoodyArea_m, HerbDryWeightSum, HerbDryWeight_m, WoodyDryWeightSum, WoodyDryWeight_m)
+
+joinedweights <- dplyr::mutate(joinedweights, HerbDryWeight_kg_ha = HerbDryWeight_m*10,
+                               WoodyDryWeight_kg_ha = WoodyDryWeight_m*10)
+
+# Add in tons per hectare
+joinedweights <- dplyr::mutate(joinedweights, HerbDryWeight_t_ha = HerbDryWeight_kg_ha/1000,
+                               WoodyDryWeight_t_ha = WoodyDryWeight_kg_ha/1000)
 
 
 

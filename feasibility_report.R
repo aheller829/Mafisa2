@@ -11,6 +11,7 @@ library(PerformanceAnalytics)
 library(ggridges)
 library(gt)
 library(gtsummary)
+library(cooccur)
 
 # Read in data
 dir <- "C:/Users/allie.heller/OneDrive - Biodiversity Research Institute/Desktop/Mafisa 2 Data/"
@@ -20,13 +21,16 @@ labdata <- read.csv("L3/Mafisa2_LabData_joined_L3.csv")
 
 cover <- read.csv("L1/plot_cover_photos.csv")
 
-dbh <- read.csv("L2/Mafisa2_DBH_L2.csv")
+# Force as utf-8 and convert to columns
+dbh <- read.csv2("L2/Mafisa2_DBH_L2.csv")
+dbh <- tidyr::separate_wider_delim(dbh, cols = ParentGlobalID.SoilPlot.Tree_ID.Tree_dbh.SurveyDate.x.y,
+                                   delim = ",", names = c("ParentGlobalID", "SoilPlot", "Tree_ID", "Tree_dbh", "SurveyDate", "x", "y"))
 
 soilbiomass <- read.csv("L2/Mafisa2_SoilBiomass_L2.csv")
 
 biomass <- read.csv("L2/Mafisa2_Biomass_recalc.csv")
 
-snap <- read.csv("L3/Mafisa2_SNAPGRAZE_QuantVegClass.csv")
+snap <- read.csv("L3/Mafisa2_SNAPGRAZE_format_csv.csv")
 
 veg <- read.csv("L2/Mafisa2_Veg2x2_BD_L2.csv")
 
@@ -151,15 +155,110 @@ joinedweights <- dplyr::left_join(joinedweights, district)
 joinedweights <- dplyr::left_join(joinedweights, cover)
 
 joinedweights %>%
-  dplyr::filter(HerbDryMatterPct < 100) %>%
-  ggplot(aes(y = HerbDryMatterPct, x = GoogleEarthClass.1, fill = GoogleEarthClass.1)) + 
+  ggplot(aes(y = HerbDryWeight_kg_ha, x = GoogleEarthClass.1, fill = GoogleEarthClass.1)) + 
+  geom_boxplot() + 
+  xlab("") + ggtitle("Herbaceous biomass across ecosystem types") +
+  theme_minimal() +
+  theme(legend.position = "none",
+        axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=1)) +
+  ylab("Herbaceous biomass (kg/ha)") 
+
+
+joinedweights %>%
+  ggplot(aes(y = WoodyDryWeight_kg_ha, x = GoogleEarthClass.1, fill = GoogleEarthClass.1)) + 
   geom_boxplot() + 
   xlab("") + ggtitle("Woody biomass across ecosystem types") +
   theme_minimal() +
   theme(legend.position = "none",
         axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=1)) +
-  ylab("Woody biomass dry matter (%)") +
-  coord_cartesian(ylim = c(0, 100)) 
+  ylab("Woody biomass (kg/ha)") 
+
+# Make tall table and do it paired
+weightstall <- joinedweights %>%
+  dplyr::select(SoilPlot, District, GoogleEarthClass.1, HerbDryWeight_kg_ha, WoodyDryWeight_kg_ha, ) %>%
+  tidyr::gather(Measure, Value, 4:5)
+
+weightstall <- dplyr::mutate(weightstall, GoogleEarthClass.1 = ifelse(GoogleEarthClass.1 == "Grassland", 
+                                                                      "Dambo", GoogleEarthClass.1))
+
+
+# Paired boxplot, tons of biomass per plot
+weightstall  %>%
+  ggplot(aes(y = Value, x = GoogleEarthClass.1, fill = Measure)) + 
+  geom_boxplot() + 
+  xlab("") + ggtitle("Clipped biomass across project areas") +
+  theme_minimal() +
+  scale_fill_hue(labels = c("Herbaceous biomass", "Woody biomass")) +
+  theme(legend.title = element_blank(),
+        axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=1)) +
+  ylab("Biomass (kg/ha)") 
+
+# Scatterplot of SOC density and biomass
+names(snap)
+snap$ClippedBiomass_kg_ha <- snap$HerbDryWeight_kg_ha + snap$WoodyDryWeight_kg_ha
+
+snap %>%
+  ggplot(aes(x = SOC_density, y = ClippedBiomass_kg_ha)) + 
+  geom_point()
+
+
+
+# Check tree species in savanna
+dbh <- dplyr::left_join(dbh, cover)
+savanna <- dplyr::filter(dbh, GoogleEarthClass.1 == "Savanna")
+
+savanna_trees <- savanna %>%
+  dplyr::group_by(Tree_ID) %>%
+  dplyr::summarise(SpeciesCount = n())
+
+# How many plots did species occur at
+savanna_tree_plots <- savanna %>%
+  dplyr::select(Tree_ID, SoilPlot) %>%
+  dplyr::distinct() %>%
+  dplyr::group_by(Tree_ID) %>%
+  dplyr::summarise(PlotCount = n())
+
+
+# Check for tree species cooccurance
+# First make dbh table wide
+dbh_wide <- dbh %>%
+  dplyr::select(Tree_ID, SoilPlot) %>%
+  dplyr::mutate(Presence = 1) %>%
+  dplyr::distinct() %>%
+  tidyr::spread(key = SoilPlot, value = Presence) %>%
+  dplyr::mutate_all(~replace(., is.na(.), 0)) %>%
+  tibble::remove_rownames() %>%
+  tibble::column_to_rownames(var = "Tree_ID")
+
+
+
+cooccur_result <- cooccur::cooccur(dbh_wide, type = "spp_site", thresh = TRUE,
+                                   spp_names = TRUE)
+summary(cooccur_result)
+plot(cooccur_result)
+
+
+# Canopy cover histograms by project area
+canopycover <- dplyr::select(soilbiomass, SoilPlot, DensiCanopyCover)
+canopycover <- dplyr::left_join(canopycover, district)
+canopycover$District <- factor(canopycover$District, levels = c("Mutala", "Mombola", "Senanga", "Kanguya"))
+canopycover <- dplyr::mutate(canopycover, Level = ifelse(DensiCanopyCover < 50, "Low", "High"))
+# Histograms
+ggplot(canopycover, aes(x = DensiCanopyCover)) +
+  geom_histogram(binwidth = 10, bins = 7, fill = "darkblue") +
+  theme_minimal() +
+  theme(legend.position="none",
+    panel.spacing = unit(0.1, "lines"),
+    strip.text.x = element_text(size = 8)) + 
+  facet_wrap(~District) +
+  ylab("") + xlab("Tree canopy cover (%)") +
+  geom_vline(xintercept = 50, linetype = "dashed", color = "red")
+
+
+
+
+
+
 
 
 
@@ -170,8 +269,8 @@ names(snap)
 data <- dplyr::select(snap, SoilPlot = SiteLabel, SOC_density, VegClass, SoilTextureClass, EstimatedPercentSand, MeanAnnualRainfall_mm, MeanAnnualTemperature_C)
 names(labdata)
 data.2 <- dplyr::select(labdata, SoilPlot, GoogleEarthClass.1)
-names(biomass)
-data.3 <- dplyr::select(biomass, SoilPlot, HerbDryWeightSum, HerbDryMatterPct, WoodyDryWeightSum, WoodyDryMatterPct)
+names(joinedweights)
+data.3 <- dplyr::select(joinedweights, SoilPlot, HerbDryWeight_kg_ha, WoodyDryWeight_kg_ha)
 names(soilbiomass)
 data.4 <- dplyr::select(soilbiomass, SoilPlot, TREE_pct:TotalCover)
 names(veg)
@@ -201,8 +300,7 @@ PerformanceAnalytics::chart.Correlation(num.data, histogram=TRUE, pch=19)
 # lm
 names(data)
 model <- SOC_density~VegClass+SoilTextureClass+EstimatedPercentSand+MeanAnnualRainfall_mm+
-  MeanAnnualTemperature_C+GoogleEarthClass.1+HerbDryWeightSum+HerbDryMatterPct+WoodyDryWeightSum+
-  WoodyDryMatterPct+TREE_pct+DRH_pct+SRH_pct+SHRUB_pct+BARE_pct+AnnualForb+AnnualGrass+Carex+Moss+PerennialForb+
+  MeanAnnualTemperature_C+GoogleEarthClass.1+HerbDryWeight_kg_ha+WoodyDryWeight_kg_ha+TREE_pct+DRH_pct+SRH_pct+SHRUB_pct+BARE_pct+AnnualForb+AnnualGrass+Carex+Moss+PerennialForb+
   PerennialGrass+Shrub+Subshrub+Tree+SpeciesRichness+TotalFoliar+LargeGaps
 
 lrm <- lm(model, data = data)
