@@ -5,32 +5,52 @@ library(stars)
 library(spsurvey)
 
 
-# Calculate points per stratum
-mom_points <- sf::st_read("C:\\Users\\allie.heller\\OneDrive - Biodiversity Research Institute\\Desktop\\Mafisa 2\\Mafisa 2 Data\\Spatial\\mom_ssu_5_gridcode.shp")
-sum1 <- mom_points %>%
-  dplyr::group_by(gridcode) %>%
-  dplyr::summarise(Count = n())
+# Subset points by sample year
+mom_ssu <- sf::st_read("C:\\Users\\allie.heller\\OneDrive - Biodiversity Research Institute\\Desktop\\Mafisa 2\\Mafisa 2 Data\\Spatial\\mom_ssu.shp")
+
+mom_ssu_2025 <- mom_ssu[sample(1:nrow(mom_ssu), size = 269), ]
+mom_ssu_2025$SampleYear <- 2025
+
+mom_ssu <- subset(mom_ssu, !(mom_ssu$CID %in% mom_ssu_2025$CID)) 
+mom_ssu$SampleYear <- 2026
 
 
-sum2 <- mom_points %>%
-  dplyr::group_by(gridcode) %>%
-  dplyr::summarise(Count = n())
+st_write(mom_ssu, "C:\\Users\\allie.heller\\OneDrive - Biodiversity Research Institute\\Desktop\\Mafisa 2\\Mafisa 2 Data\\Spatial\\mom_ssu_2026.shp", append = FALSE)
+st_write(mom_ssu_2025, "C:\\Users\\allie.heller\\OneDrive - Biodiversity Research Institute\\Desktop\\Mafisa 2\\Mafisa 2 Data\\Spatial\\mom_ssu_2025.shp", append = FALSE)
+
+
 
 
 
 # Mombola point cleanup
-mom_points <- sf::st_read("C:\\Users\\allie.heller\\OneDrive - Biodiversity Research Institute\\Desktop\\Mafisa 2\\Mafisa 2 Data\\Spatial\\mombola_tsu_strata.shp")
+mom_points <- sf::st_read("C:\\Users\\allie.heller\\OneDrive - Biodiversity Research Institute\\Desktop\\Mafisa 2\\Mafisa 2 Data\\Spatial\\mom_tsu_strata.shp")
 # Remove duplicates
 names(mom_points)
-mom_points <- dplyr::select(mom_points, POINT_X, POINT_Y, RASTERVALU, geometry)
+mom_points <- dplyr::select(mom_points, X, Y, CoverClass = gridcode, SampleYear, geometry)
 mom_points <- dplyr::distinct(mom_points)
 names(mom_points)
 mom_points$FID <- seq.int(nrow(mom_points))
-mom_points <- dplyr::select(mom_points, FID, POINT_X, POINT_Y, CoverClass = RASTERVALU, geometry)
+mom_points <- dplyr::mutate(mom_points, Cover = ifelse(CoverClass == 2, "Dambo",
+                                                       ifelse(CoverClass == 3, "Woodland",
+                                                              ifelse(CoverClass == 4, "Savanna", "Unknown"))))
+
+mom_points <- dplyr::select(mom_points, FID, SampleYear, X, Y, CoverCode = CoverClass, Cover, geometry)
+
+# Add preliminary names
+mom_points$Project <- "Mombola"
+
+mom_points <- tidyr::unite(mom_points, col = "PlotName", c("Project", "FID"), sep = "", remove = FALSE)
+
+
+sf::st_write(mom_points, "C:\\Users\\allie.heller\\OneDrive - Biodiversity Research Institute\\Desktop\\Mafisa 2\\Mafisa 2 Data\\Spatial\\mom_tsu_final_withstrata.shp", append = FALSE)
 
 
 
-st_write(mom_points, "C:\\Users\\allie.heller\\OneDrive - Biodiversity Research Institute\\Desktop\\Mafisa 2\\Mafisa 2 Data\\Spatial\\mom_tsu_final_withstrata.shp", append = FALSE)
+
+
+
+
+
 
 
 # Mutala point cleanup
@@ -132,19 +152,27 @@ mom_tsu_table <- mom_tsu_table %>%
 
 
 
+
+
 # Add plot names
+mut_tsu <- sf::st_read("C:\\Users\\allie.heller\\OneDrive - Biodiversity Research Institute\\Desktop\\Mafisa 2\\Mafisa 2 Data\\Spatial\\mut_tsu_final_withstrata.shp")
 
+mut_tsu$Project <- "Mutala"
 
+mut_tsu$Name <- "MTL"
 
+# Add name of cover class
+mut_tsu <- dplyr::mutate(mut_tsu, CoverClassName = ifelse(CoverClass == 2, "Dambo",
+                                                          ifelse(CoverClass == 3, "Woodland",
+                                                                 ifelse(CoverClass == 4, "Savanna", 
+                                                                        ifelse(CoverClass == 1, "Agriculture",
+                                                                               ifelse(CoverClass == 2, "Water", NA))))))
 
+mut_tsu <- tidyr::unite(mut_tsu, col = "PlotName", c("Name", "FID_1"), sep = "", remove = FALSE)
 
-
-
-
-
-
-
-
+mut_tsu <- dplyr::select(mut_tsu, FID = FID_1, Project, PlotName, 
+                         CoverClass, CoverClassName, X = POINT_X, Y = POINT_Y, geometry)
+sf::st_write(mut_tsu, "C:\\Users\\allie.heller\\OneDrive - Biodiversity Research Institute\\Desktop\\Mafisa 2\\Mafisa 2 Data\\Spatial\\mut_tsu_final_withstrata.shp", append = FALSE)
 
 
 
