@@ -20,8 +20,6 @@ st_write(mom_ssu_2025, "C:\\Users\\allie.heller\\OneDrive - Biodiversity Researc
 
 
 
-
-
 # Mombola point cleanup
 mom_points <- sf::st_read("C:\\Users\\allie.heller\\OneDrive - Biodiversity Research Institute\\Desktop\\Mafisa 2\\Mafisa 2 Data\\Spatial\\mom_tsu_strata.shp")
 # Remove duplicates
@@ -49,20 +47,51 @@ sf::st_write(mom_points, "C:\\Users\\allie.heller\\OneDrive - Biodiversity Resea
 
 
 
+# Subset Mutala points by sample year
+mut_ssu <- sf::st_read("C:\\Users\\allie.heller\\OneDrive - Biodiversity Research Institute\\Desktop\\Mafisa 2\\Mafisa 2 Data\\Spatial\\mut_ssu.shp")
 
+mut_ssu_2025 <- mut_ssu[sample(1:nrow(mut_ssu), size = 269), ]
+mut_ssu_2025$SampleYear <- 2025
+
+mut_ssu <- subset(mut_ssu, !(mut_ssu$CID %in% mut_ssu_2025$CID)) 
+mut_ssu$SampleYear <- 2026
+
+
+st_write(mut_ssu, "C:\\Users\\allie.heller\\OneDrive - Biodiversity Research Institute\\Desktop\\Mafisa 2\\Mafisa 2 Data\\Spatial\\mut_ssu_2026.shp", append = FALSE)
+st_write(mut_ssu_2025, "C:\\Users\\allie.heller\\OneDrive - Biodiversity Research Institute\\Desktop\\Mafisa 2\\Mafisa 2 Data\\Spatial\\mut_ssu_2025.shp", append = FALSE)
 
 
 
 # Mutala point cleanup
-mut_points <- sf::st_read("C:\\Users\\allie.heller\\OneDrive - Biodiversity Research Institute\\Desktop\\Mafisa 2\\Mafisa 2 Data\\Spatial\\mutala_tsu_strata.shp")
+mut_points <- sf::st_read("C:\\Users\\allie.heller\\OneDrive - Biodiversity Research Institute\\Desktop\\Mafisa 2\\Mafisa 2 Data\\Spatial\\mut_tsu_strata.shp")
 # Remove duplicates
-mut_points <- dplyr::select(mut_points, POINT_X, POINT_Y, RASTERVALU, geometry)
+names(mut_points)
+mut_points <- dplyr::select(mut_points, X, Y, CoverClass = gridcode, SampleYear, geometry)
 mut_points <- dplyr::distinct(mut_points)
 names(mut_points)
 mut_points$FID <- seq.int(nrow(mut_points))
-mut_points <- dplyr::select(mut_points, FID, POINT_X, POINT_Y, CoverClass = RASTERVALU, geometry)
+mut_points <- dplyr::mutate(mut_points, Cover = ifelse(CoverClass == 2, "Dambo",
+                                                       ifelse(CoverClass == 3, "Woodland",
+                                                              ifelse(CoverClass == 4, "Savanna", "Unknown"))))
 
-st_write(mut_points, "C:\\Users\\allie.heller\\OneDrive - Biodiversity Research Institute\\Desktop\\Mafisa 2\\Mafisa 2 Data\\Spatial\\mut_tsu_final_withstrata.shp", append = FALSE)
+mut_points <- dplyr::select(mut_points, FID, SampleYear, X, Y, CoverCode = CoverClass, Cover, geometry)
+
+# Add preliminary names
+mut_points$Project <- "Mutala"
+
+mut_points <- tidyr::unite(mut_points, col = "PlotName", c("Project", "FID"), sep = "", remove = FALSE)
+
+mut_points <- sf::st_zm(mut_points, drop = TRUE, what = "ZM")
+
+sf::st_write(mut_points, "C:\\Users\\allie.heller\\OneDrive - Biodiversity Research Institute\\Desktop\\Mafisa 2\\Mafisa 2 Data\\Spatial\\mut_tsu_final_withstrata.shp", append = FALSE)
+
+
+
+
+
+
+
+
 
 
 # Calculate poly areas and look at sample points per strata
