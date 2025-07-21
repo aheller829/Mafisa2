@@ -3,6 +3,131 @@ library(sf)
 library(raster)
 library(stars)
 library(spsurvey)
+library(igraph)
+library(geosphere)
+
+
+# Redistribute sample points from both years across Limulunga project areas
+# Read in Mombola points
+mom_points <- sf::st_read(dsn = "T:\\Projects\\Carbon and Biodiversity Projects\\Mafisa-2\\Projects\\Mafisa-2_SampleDesign\\Mafisa-2_SampleDesign.gdb",
+                          layer = "mom_tsu_final_withstrata")
+# Read in area 
+mom_project_area <- sf::st_read(dsn = "T:\\Projects\\Carbon and Biodiversity Projects\\Mafisa-2\\Projects\\Mafisa-2_SampleDesign\\Mafisa-2_SampleDesign.gdb",
+                                layer = "Mombola_Project_Area_revised")
+# Find differences in areas (old and added)
+unique(mom_project_area$Name)
+limulunga <- c("Limulunga 2", "Limulunga 3", "Limulunga West")
+point_areas <- subset(mom_project_area, !(mom_project_area$Name %in% limulunga)) 
+nopoint_areas <- subset(mom_project_area, mom_project_area$Name %in% limulunga)
+# Sum areas 
+pointareas_total <- point_areas %>%
+  summarise(TotalArea = sum(Area))
+
+nopointareas_total <- nopoint_areas %>%
+  summarise(TotalArea = sum(Area))
+# 8019 km2 have points
+# 2896 km2 don't have points
+# Distribute points proportionally 
+# What percent of 8019 is 2896
+(2896*100)/8019
+# 36% of the total project area doesn't have points
+# What is 36% of 538 (ssus)?
+(36*538)/100
+# 194 SSUs
+# 581 points from overall sample design should be moved to Limulunga
+# 290 points from each year, 97 SSUs from each year
+# Need to cluster points so that clusters remain intact
+adj <- sf::st_distance(mom_points) # Calculate distances
+adj <- matrix(as.numeric(as.numeric(adj)) < 600, nrow = nrow(adj)) # Binary matrix teling us whether each plot is within 600 m
+g <- graph_from_adjacency_matrix(adj) # Plot
+plot(g)
+# Add back to dataframe
+mom_points$Cluster <- factor(components(g)$membership)
+# Add new plot names so that plots within a cluster are close in name
+mom_points <- mom_points %>%
+  dplyr::group_by(Cluster) %>%
+  dplyr::mutate(ID = row_number())
+mom_points <- tidyr::unite(mom_points, col = "NewPlotName", c("Project", "Cluster", "ID"), sep = "", remove = FALSE)
+# Tidy column names
+names(mom_points)
+mom_points <- dplyr::select(mom_points, PlotName = NewPlotName, SSU = Cluster, FID = FID_1, SampleYear:Y, Project, Shape)
+# Create list of 97 SSUs to remove from each year (exclude SSU 467 from 2025 which was sampled already)
+ssus_2025 <- mom_points %>%
+  sf::st_drop_geometry() %>%
+  dplyr::filter(SampleYear == 2025) %>%
+  dplyr::select(SSU) %>%
+  dplyr::distinct()
+ssu_2025_rm <- dplyr::filter(ssus_2025, SSU != 467)
+ssu_2025_rm <- ssu_2025_rm[sample(1:nrow(ssu_2025_rm), size = 97), ]
+# Repeat for 2026 (removing 290 points)
+ssus_2026 <- mom_points %>%
+  sf::st_drop_geometry() %>%
+  dplyr::filter(SampleYear == 2026) %>%
+  dplyr::select(SSU) %>%
+  dplyr::distinct()
+ssu_2026_rm <-ssus_2026[sample(1:nrow(ssus_2026), size = 97), ]
+# Remove this random selection from total points and save as new shapefile
+ssu_rm <- rbind(ssu_2025_rm, ssu_2026_rm)
+mom_points <- subset(mom_points, !(mom_points$SSU %in% ssu_rm$SSU))
+# Now will have to remake 580 points for new polygons
+st_write(mom_points, "C:\\Users\\allie.heller\\OneDrive - Biodiversity Research Institute\\Desktop\\Mafisa 2\\Mafisa 2 Data\\Baseline\\Spatial\\mom_final_tsu_nolimulunga.shp", append = FALSE)
+
+
+
+
+# Subset Limulunga TSUs by sample year, add cluster, etc
+limulunga_tsus <- sf::st_read(dsn = "T:\\Projects\\Carbon and Biodiversity Projects\\Mafisa-2\\Projects\\Mafisa-2_SampleDesign\\Mafisa-2_SampleDesign.gdb",
+                          layer = "mom_lim_tsus_join")
+
+adj <- sf::st_distance(limulunga_tsus) # Calculate distances
+adj <- matrix(as.numeric(as.numeric(adj)) < 600, nrow = nrow(adj)) # Binary matrix teling us whether each plot is within 600 m
+g <- graph_from_adjacency_matrix(adj) # Plot
+plot(g)
+# Add back to dataframe
+limulunga_tsus$Cluster <- factor(components(g)$membership)
+# Add new plot names so that plots within a cluster are close in name
+limulunga_tsus$Project <- "Mombola"
+limulunga_tsus$FID <- seq.int(nrow(limulunga_tsus))
+limulunga_tsus <- limulunga_tsus %>%
+  dplyr::group_by(Cluster) %>%
+  dplyr::mutate(ID = row_number())
+limulunga_tsus <- tidyr::unite(limulunga_tsus , col = "PlotName", c("Project", "Cluster", "ID"), sep = "", remove = FALSE)
+
+st_write(limulunga_tsus, "C:\\Users\\allie.heller\\OneDrive - Biodiversity Research Institute\\Desktop\\Mafisa 2\\Mafisa 2 Data\\Baseline\\Spatial\\lim_tsus.shp", append = FALSE)
+
+
+# Add sample year
+lim_tsus <- sf::st_read("C:\\Users\\allie.heller\\OneDrive - Biodiversity Research Institute\\Desktop\\Mafisa 2\\Mafisa 2 Data\\Baseline\\Spatial\\lim_tsus.shp")
+table(lim_tsus$Cluster)
+
+
+clusters <- lim_tsus %>%
+  sf::st_drop_geometry() %>%
+  dplyr::select(Cluster) %>%
+  dplyr::distinct()
+
+clusters2025 <- clusters[sample(1:nrow(clusters), size = 102), ]
+lim_tsu_2025 <- subset(lim_tsus, lim_tsus$Cluster %in% clusters2025)
+lim_tsu_2026 <- subset(lim_tsus, !(lim_tsus$Cluster %in% clusters2025))
+
+lim_tsu_2026$SampleYear <- 2026
+lim_tsu_2025$SampleYear <- 2025
+
+lim_tsus <- rbind(lim_tsu_2025, lim_tsu_2026)
+names(lim_tsus)
+lim_tsus <- dplyr::select(lim_tsus, FID = FID_1, PlotName, SSU = Cluster, SampleYear, X, Y, Project)
+
+st_write(lim_tsus, "C:\\Users\\allie.heller\\OneDrive - Biodiversity Research Institute\\Desktop\\Mafisa 2\\Mafisa 2 Data\\Baseline\\Spatial\\mom_limulunga_tsus.shp", append = FALSE)
+
+# Split whole Mombola project area by year
+
+
+
+
+
+
+
+
 
 
 # Subset points by sample year
