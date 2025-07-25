@@ -9,8 +9,8 @@ setwd(dir)
 
 
 # Read in the L1 data
-mafisa2_soil_biomass <- excel_sheets("L1/20250721_BaselineMombola_L1.xlsx") # File path
-mafisa2_soil_biomass_list <- lapply(mafisa2_soil_biomass, function(x) read_excel("L1/20250721_BaselineMombola_L1.xlsx", sheet = x))  # Read excel file into list of excel sheets
+mafisa2_soil_biomass <- excel_sheets("L1/20250725_BaselineMombola_L1.xlsx") # File path
+mafisa2_soil_biomass_list <- lapply(mafisa2_soil_biomass, function(x) read_excel("L1/20250725_BaselineMombola_L1.xlsx", sheet = x))  # Read excel file into list of excel sheets
 names(mafisa2_soil_biomass_list ) <- mafisa2_soil_biomass # Pull sheet names from the workbook
 list2env(mafisa2_soil_biomass_list, envir=.GlobalEnv) # Write each excel sheet to a separate dataframe 
 
@@ -28,8 +28,8 @@ bulk_density_clean <- bulk_density_mass_increment_1 %>%
   dplyr::ungroup() 
 # QA/QC check
 bd_qc <- bulk_density_clean %>%
-  dplyr::filter(BD_wet_mass_total > 15000 | # If any rows are above expected range
-                  BD_wet_mass_total < 5000 | # If any rows are below expected range
+  dplyr::filter(BD_wet_mass_total > 17000 | # If any rows are above expected range
+                  BD_wet_mass_total < 4000 | # If any rows are below expected range
                   is.na(BD_wet_mass_total)) # If any rows contain NA
 
 
@@ -41,8 +41,8 @@ soc1_clean <- soc_sample_one_mass_increme_2 %>%
   dplyr::ungroup()
 # QA/QC check
 soc1_qc <- soc1_clean %>%
-  dplyr::filter(SOC1_mass_total > 15000 | # If any rows are above expected range
-                  SOC1_mass_total < 5000 | # If any rows are below expected range
+  dplyr::filter(SOC1_mass_total > 17000 | # If any rows are above expected range
+                  SOC1_mass_total < 4000 | # If any rows are below expected range
                   is.na(SOC1_mass_total)) # If any rows contain NA
 
 # Clean SOC2 table
@@ -53,8 +53,8 @@ soc2_clean <- soc_sample_two_mass_increme_3 %>%
   dplyr::ungroup()
 # QA/QC check
 soc2_qc <- soc2_clean %>%
-  dplyr::filter(SOC2_mass_total > 15000 | # If any rows are above expected range
-                  SOC2_mass_total < 5000 | # If any rows are below expected range
+  dplyr::filter(SOC2_mass_total > 17000 | # If any rows are above expected range
+                  SOC2_mass_total < 4000 | # If any rows are below expected range
                   is.na(SOC2_mass_total)) # If any rows contain NA
 
 # Clean densiometer table
@@ -69,6 +69,10 @@ densi_qc <- densi_clean %>%
 densi_clean <- densi_clean %>%
   dplyr::group_by(ParentGlobalID) %>%
   dplyr::summarise(Densi_points = mean(Densi_points))
+# QA/QC check
+densi_qc <- densi_clean %>%
+  dplyr::filter(Densi_points > 100 | # If any rows are above expected range
+                  is.na(Densi_points)) # If any rows contain NA
 
 
 # Clean DbH table
@@ -80,7 +84,7 @@ dbh_qc <- dbh_clean  %>%
                   is.na(Tree_dbh)) # If any dbh rows contain NA
                   # is.na(Tree_ID)) # If any species name rows contain NA - disable this check if not using species IDs
 # Remove incorrect data if needed
-dbh_clean <- dplyr::filter(dbh_clean, ObjectID != 118 & ObjectID != 1225)
+dbh_clean <- dplyr::filter(dbh_clean, ObjectID != 118 & ObjectID != 1225 & ObjectID != 1550 & ObjectID != 2704)
 
 
 # Clean woody biomass table
@@ -124,7 +128,7 @@ names(Mafisa_2_data_join)
 Mafisa_2_data_join <- dplyr::select(Mafisa_2_data_join, ObjectID:SoilPlot, SoilPlot_alt, LandCover, LandCover_alt, Names:BD_frag_vol, BD_wet_mass_total,
                                     WTD_mass:SOC1_rock_volume, SOC1_mass_total, SOC2_collected:SOC2_rock_volume, SOC2_mass_total,
                                     SOC_combined:Densi_collected, DensiCanopyCover = CanopyCover, Densi_mean = Densi_points, PCT_collected:BARE_pct, TotalCover, # Renaming canopy cover variable
-                                    PCT_notes, DBH_collected:WoodyBio_samples, WoodyBio_weight, HerbBio_length:HerbBio_samples, HerbBio_weight, 
+                                    PCT_notes, DBH_collected:Sapling_collected, Sapling_count_radius, Sapling_count:WoodyBio_samples, WoodyBio_weight, HerbBio_length:HerbBio_samples, HerbBio_weight, 
                                     Biomass_notes, CreationDate, Creator, EditDate, Editor, x, y)
 # Add form version 
 Mafisa_2_data_join <- dplyr::mutate(Mafisa_2_data_join, FormVersion = "Mafisa_2 Soil and Biomass Sampling")
@@ -188,16 +192,27 @@ pct_qc <- Mafisa_2_data_join %>%
                 TotalCover < 100 | # Total cover should not be below 100
                 TotalCover > 200 | # Total cover should not exceed 200
                 LowerCanopyCover > 100) # Lower canopy cover should not exceed 100, except perhaps in rare situations where shrub cover is high and shrubs have an unusual shape allowing for beneath shrub cover to be estimated
-  
+
+# Fix error in percent bare ground estimate and recalculate total cover
+# Percent bare ground estimate is unreasonably high for Mombola4083 
+45 + 20 + 0 + 10 # Add other functional group estimates together
+Mafisa_2_data_join[Mafisa_2_data_join$ObjectID == 52, "BARE_pct"] <- 25 # Overwrite bare ground to equal the difference of functional group sums (less bare ground) subtracted from 100
+Mafisa_2_data_join[Mafisa_2_data_join$ObjectID == 52, "TotalCover"] <- 100 # Overwrite total cover to equal 100 (the new sum across all functional/ground cover groups)
+# Recreate the pct_qc dataframe and be sure that plot is now error free (and track in error tracking excel workbook)
 
 # Biomass QC
 bio_qc <- Mafisa_2_data_join %>%
   dplyr::select(ObjectID:PlotNotes, Biomass_collected:Biomass_notes) %>%
   dplyr::filter(Biomass_collected == "yes" & if_any(c(WoodyBio_length, WoodyBio_samples, WoodyBio_weight,
                                                       HerbBio_length, HerbBio_samples, HerbBio_weight), ~ is.na(.)) | # If biomass was collected, transect length, sample number, and weights should not be NA
-                WoodyBio_weight > 2000 | # Biomass weight should not exceed 2000
-                HerbBio_weight > 2000 ) # Biomass weight should not exceed 2000
-  
+                WoodyBio_weight > 5000 | # Biomass weight should not exceed 2000
+                HerbBio_weight > 5000 ) # Biomass weight should not exceed 2000
+
+# Sapling count
+sapling_qc <- Mafisa_2_data_join %>%
+  dplyr::select(ObjectID:PlotNotes, Sapling_collected:Sapling_count) %>%
+  dplyr::filter(Sapling_collected == "yes" & if_any(c(Sapling_count_radius, Sapling_count), ~ is.na(.)) |
+                  Sapling_count > 30)
 
 
 
@@ -212,14 +227,17 @@ soilbiomass_l2$LandCover <- NA
 soilbiomass_l2$LandCover_alt <- NA
 soilbiomass_l2$SOC1_rock_volume <- NA
 soilbiomass_l2$SOC2_rock_volume <- NA
+soilbiomass_l2$Sapling_count_radius <- NA
 # Check date structure
 str(soilbiomass_l2)
 
 # Rename/reorder variables from soilbiomass table so that it can be joined to current working table
+names(soilbiomass_l2)
 soilbiomass_l2 <- dplyr::select(soilbiomass_l2, ObjectID:SoilPlot, SoilPlot_alt, LandCover, LandCover_alt,
                                 Names, PlotNotes,
                                 BD_collected, BD_depth, BD_frag_vol, BD_wet_mass_total:SOC1_depth,
-                                SOC1_rock_volume, SOC1_mass_total:SOC2_depth, SOC2_rock_volume, SOC2_mass_total:FormVersion)
+                                SOC1_rock_volume, SOC1_mass_total:SOC2_depth, SOC2_rock_volume, SOC2_mass_total:Sapling_collected,
+                                Sapling_count_radius, Sapling_count:FormVersion)
 Mafisa_2_data_join <- dplyr::select(Mafisa_2_data_join, -Densi_mean)
 # Do columns match?
 names(soilbiomass_l2)
@@ -235,6 +253,6 @@ Mafisa_2_data_join$CreationDate <- as.character(Mafisa_2_data_join$CreationDate)
 Mafisa_2_data_join <- rbind(Mafisa_2_data_join, soilbiomass_l2)
 
 # Save QC'd data 
-write.csv(Mafisa_2_data_join, "L2/Baseline_Mafisa2_SoilBiomass_L2_07212025.csv", row.names = FALSE)
+write.csv(Mafisa_2_data_join, "L2/Baseline_Mafisa2_SoilBiomass_L2_07252025.csv", row.names = FALSE)
 
 

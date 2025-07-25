@@ -7,6 +7,42 @@ library(igraph)
 library(geosphere)
 
 
+
+# Rename Mutala points so they are clustereed
+mut_points <- sf::st_read(dsn = "T:\\Projects\\Carbon and Biodiversity Projects\\Mafisa-2\\GIS_Projects\\Mafisa-2_SampleDesign\\Mafisa-2_SampleDesign.gdb",
+                          layer = "mut_tsu_final_withstrata")
+adj <- sf::st_distance(mut_points) # Calculate distances
+adj <- matrix(as.numeric(as.numeric(adj)) < 600, nrow = nrow(adj)) # Binary matrix teling us whether each plot is within 600 m
+g <- graph_from_adjacency_matrix(adj) # Plot
+plot(g)
+# Add back to dataframe
+mut_points$Cluster <- factor(components(g)$membership)
+table(mut_points$Cluster)
+mut_count <- mut_points %>%
+  dplyr::group_by(SSU) %>%
+  dplyr::summarise(Count = n())
+# Add new plot names so that plots within a cluster are close in name
+mut_points <- mut_points %>%
+  dplyr::group_by(Cluster) %>%
+  dplyr::mutate(ID = row_number())
+mut_points <- tidyr::unite(mut_points, col = "NewPlotName", c("Project", "Cluster", "ID"), sep = "", remove = FALSE)
+# Tidy column names
+names(mut_points)
+mut_points <- dplyr::select(mut_points, PlotName = NewPlotName, SSU = Cluster, FID = FID_1, SampleYear:Y, Project, Shape)
+# Now will have to remake 580 points for new polygons
+st_write(mut_points, "C:\\Users\\allie.heller\\OneDrive - Biodiversity Research Institute\\Desktop\\Mafisa 2\\Mafisa 2 Data\\Baseline\\Spatial\\mut_tsu_final_renamed.shp", append = FALSE)
+
+
+
+
+
+
+
+
+
+
+
+
 # Redistribute sample points from both years across Limulunga project areas
 # Read in Mombola points
 mom_points <- sf::st_read(dsn = "T:\\Projects\\Carbon and Biodiversity Projects\\Mafisa-2\\Projects\\Mafisa-2_SampleDesign\\Mafisa-2_SampleDesign.gdb",
@@ -71,6 +107,7 @@ ssu_rm <- rbind(ssu_2025_rm, ssu_2026_rm)
 mom_points <- subset(mom_points, !(mom_points$SSU %in% ssu_rm$SSU))
 # Now will have to remake 580 points for new polygons
 st_write(mom_points, "C:\\Users\\allie.heller\\OneDrive - Biodiversity Research Institute\\Desktop\\Mafisa 2\\Mafisa 2 Data\\Baseline\\Spatial\\mom_final_tsu_nolimulunga.shp", append = FALSE)
+
 
 
 
