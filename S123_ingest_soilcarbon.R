@@ -2,6 +2,7 @@
 
 library(tidyverse)
 library(readxl)
+library(ggplot2)
 
 ### Point to data folder
 dir <- "C:/Users/allie.heller/OneDrive - Biodiversity Research Institute/Desktop/Mafisa 2/Mafisa 2 Data/Baseline/"
@@ -9,8 +10,8 @@ setwd(dir)
 
 
 # Read in the L1 data
-mafisa2_soil_biomass <- excel_sheets("L1/20250725_BaselineMombola_L1.xlsx") # File path
-mafisa2_soil_biomass_list <- lapply(mafisa2_soil_biomass, function(x) read_excel("L1/20250725_BaselineMombola_L1.xlsx", sheet = x))  # Read excel file into list of excel sheets
+mafisa2_soil_biomass <- excel_sheets("L1/20250730_BaselineMombola_L1.xlsx") # File path - update to reflect most recent data download
+mafisa2_soil_biomass_list <- lapply(mafisa2_soil_biomass, function(x) read_excel("L1/20250730_BaselineMombola_L1.xlsx", sheet = x))  # Read excel file into list of excel sheets - update file name to reflect most recent data download
 names(mafisa2_soil_biomass_list ) <- mafisa2_soil_biomass # Pull sheet names from the workbook
 list2env(mafisa2_soil_biomass_list, envir=.GlobalEnv) # Write each excel sheet to a separate dataframe 
 
@@ -164,6 +165,7 @@ bd_errors <- Mafisa_2_data_join %>%
 # Document any changes made to correct dataset
 
 
+
 # SOC/texture QC
 soc_errors <- Mafisa_2_data_join %>%
   dplyr::select(ObjectID:PlotNotes, SOC1_collected:TXT_notes) %>%
@@ -252,7 +254,41 @@ Mafisa_2_data_join$CreationDate <- as.character(Mafisa_2_data_join$CreationDate)
 # Join tables
 Mafisa_2_data_join <- rbind(Mafisa_2_data_join, soilbiomass_l2)
 
-# Save QC'd data 
-write.csv(Mafisa_2_data_join, "L2/Baseline_Mafisa2_SoilBiomass_L2_07252025.csv", row.names = FALSE)
+# Convert survey date back to date structure, standardized across dataset
+Mafisa_2_data_join$SurveyDate <- as.Date(Mafisa_2_data_join$SurveyDate, format = "%Y-%m-%d %H:%M:%S")
 
+# Save QC'd data 
+write.csv(Mafisa_2_data_join, "L2/Baseline_Mafisa2_SoilBiomass_L2_07302025.csv", row.names = FALSE)
+
+Mafisa_2_data_join <- read.csv("L2/Baseline_Mafisa2_SoilBiomass_L2_07302025.csv")
+
+
+
+
+
+
+
+
+
+# It seems that BD weights have increased with time in the field - is this true? Make a plot to see
+Mafisa_2_data_join$Sample_Month_Day <- substr(Mafisa_2_data_join$SurveyDate, 1, 10) # Create new variable without sample time
+Mafisa_2_data_join$BD_depth <- as.factor(Mafisa_2_data_join$BD_depth) # Convert BD_depth to factor for plotting to see if low weights correspond with shallow cores
+
+ggplot2::ggplot(Mafisa_2_data_join, aes(x = Sample_Month_Day, y = BD_wet_mass_total, color = BD_depth)) + 
+  geom_point() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+# Consider modifying QC outlier tests for SOC and BD to a lower range of 8000
+
+# Repeat for SOC core weights
+# SOC core 1
+Mafisa_2_data_join$SOC1_depth <- as.factor(Mafisa_2_data_join$SOC1_depth) 
+ggplot2::ggplot(Mafisa_2_data_join, aes(x = Sample_Month_Day, y = SOC1_mass_total, color = SOC1_depth)) + 
+  geom_point() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+# SOC core 2
+Mafisa_2_data_join$SOC2_depth <- as.factor(Mafisa_2_data_join$SOC2_depth) 
+ggplot2::ggplot(Mafisa_2_data_join, aes(x = Sample_Month_Day, y = SOC2_mass_total, color = SOC2_depth)) + 
+  geom_point() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+# Fewer outlier weights for soil cores, and those that are low outliers do correspond to shallow cores
 
