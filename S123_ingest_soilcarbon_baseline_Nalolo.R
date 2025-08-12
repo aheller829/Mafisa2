@@ -12,8 +12,8 @@ setwd(dir)
 
 
 # Read in the L1 data
-mafisa2_soil_biomass <- excel_sheets("L1/20250804_BaselineSiomaShangombo_L1.xlsx") # File path - update to reflect most recent data download
-mafisa2_soil_biomass_list <- lapply(mafisa2_soil_biomass, function(x) read_excel("L1/20250804_BaselineSiomaShangombo_L1.xlsx", sheet = x))  # Read excel file into list of excel sheets - update file name to reflect most recent data download
+mafisa2_soil_biomass <- excel_sheets("L1/20250804_BaselineMombola_L1.xlsx") # File path - update to reflect most recent data download
+mafisa2_soil_biomass_list <- lapply(mafisa2_soil_biomass, function(x) read_excel("L1/20250804_BaselineMombola_L1.xlsx", sheet = x))  # Read excel file into list of excel sheets - update file name to reflect most recent data download
 names(mafisa2_soil_biomass_list ) <- mafisa2_soil_biomass # Pull sheet names from the workbook
 list2env(mafisa2_soil_biomass_list, envir=.GlobalEnv) # Write each excel sheet to a separate dataframe 
 
@@ -34,7 +34,7 @@ bd_qc <- bulk_density_clean %>%
   dplyr::filter(BD_wet_mass_total > 17000 | # If any rows are above expected range
                   BD_wet_mass_total < 8000 | # If any rows are below expected range
                   is.na(BD_wet_mass_total)) # If any rows contain NA
-
+# 16 outlier values where BD_mass_total is higher or lower than expected
 
 # Clean SOC1 table
 soc1_clean <- soc_sample_one_mass_increme_2 %>%
@@ -59,6 +59,7 @@ soc2_qc <- soc2_clean %>%
   dplyr::filter(SOC2_mass_total > 17000 | # If any rows are above expected range
                   SOC2_mass_total < 4000 | # If any rows are below expected range
                   is.na(SOC2_mass_total)) # If any rows contain NA
+# Two plots with outlier values where SOC2_mass_total is high
 
 # Clean densiometer table
 densi_clean <- densiometer_reading_4 %>%
@@ -85,11 +86,11 @@ dbh_clean <- plant_id_dbh_greater_5cm_5 %>%
 dbh_qc <- dbh_clean  %>%
   dplyr::filter(Tree_dbh < 5 | # If any rows are below expected range
                   is.na(Tree_dbh)) # If any dbh rows contain NA
-                  # is.na(Tree_ID)) # If any species name rows contain NA - disable this check if not using species IDs
-# Remove incorrect data if needed
+# is.na(Tree_ID)) # If any species name rows contain NA - disable this check if not using species IDs
+# Four plots with missing data
 
-# THIS FIX IS FOR MOMBOLA PROJECT AREA ONLY
-# dbh_clean <- dplyr::filter(dbh_clean, ObjectID != 118 & ObjectID != 1225 & ObjectID != 1550 & ObjectID != 2704) - this is for Mombola project area only
+# MOMBOLA PROJECT ONLY: Remove plots flagged by QC check where DBH is < 5 or is missing - be sure to document in plot tracking
+dbh_clean <- dplyr::filter(dbh_clean, ObjectID != 118 & ObjectID != 1225 & ObjectID != 1550 & ObjectID != 2704) 
 
 
 # Clean woody biomass table
@@ -138,7 +139,7 @@ Mafisa_2_data_join <- dplyr::select(Mafisa_2_data_join, ObjectID:SoilPlot, SoilP
 # Add form version 
 Mafisa_2_data_join <- dplyr::mutate(Mafisa_2_data_join, FormVersion = "Mafisa_2 Soil and Biomass Sampling")
 # Add project
-Mafisa_2_data_join <- dplyr::mutate(Mafisa_2_data_join, Project = "Sioma-Shangombo") 
+Mafisa_2_data_join <- dplyr::mutate(Mafisa_2_data_join, Project = "Nalolo-Mongu-Limulunga") 
 
 
 
@@ -149,9 +150,10 @@ Mafisa_2_data_join <- dplyr::mutate(Mafisa_2_data_join, Project = "Sioma-Shangom
 plotchar_errors <- Mafisa_2_data_join %>%
   dplyr::select(ObjectID:PlotNotes, x, y) %>%
   dplyr::filter(!is.na(SoilPlot_alt) | # Did a plot name need to be modified or added?
-                !is.na(LandCover_alt)| # Was an alternative land cover type identified?
-                is.na(x) | # Are x data present?
-                is.na(y)) # Are y data present?
+                  !is.na(LandCover_alt)| # Was an alternative land cover type identified?
+                  is.na(x) | # Are x data present?
+                  is.na(y)) # Are y data present?
+# 15 plots where alternative land cover was used
 
 
 
@@ -165,28 +167,28 @@ bd_errors <- Mafisa_2_data_join %>%
                   WTD_mass < 40 | # Lower expected WTD value
                   WTD_mass > 140) # Upper expected WTD value
 
-# If bd_errors returns a dataframe with > 0 observations, check returned plots to see why 
-# Document missing data, outliers, etc. and connect with data collection crews if needed
-# Document any changes made to correct dataset
-
+# 16 plots with outlier mass totals 
 
 
 # SOC/texture QC
 soc_errors <- Mafisa_2_data_join %>%
   dplyr::select(ObjectID:PlotNotes, SOC1_collected:TXT_notes) %>%
   dplyr::filter(SOC1_collected == "yes" & if_any(c(SOC1_depth, SOC1_mass_total), ~ is.na(.)) | # If SOC1 was collected, depth and mass should not be NA
-                SOC2_collected == "yes" & if_any(c(SOC2_depth, SOC2_mass_total), ~ is.na(.)) | # If SOC2 was collected, depth and mass should not be NA
-                if_any(c(SOC1_mass_total, SOC2_mass_total), ~ . > 17000) | # Upper expected SOC mass value
-                if_any(c(SOC1_mass_total, SOC2_mass_total), ~ . < 8000) | # Lower expected SOC mass value
-                SOC_combined != "yes" | # If SOC samples were not combined, why?
-                TXT_collected != "yes") # If texture sample was not collected, why?
+                  SOC2_collected == "yes" & if_any(c(SOC2_depth, SOC2_mass_total), ~ is.na(.)) | # If SOC2 was collected, depth and mass should not be NA
+                  if_any(c(SOC1_mass_total, SOC2_mass_total), ~ . > 17000) | # Upper expected SOC mass value
+                  if_any(c(SOC1_mass_total, SOC2_mass_total), ~ . < 8000) | # Lower expected SOC mass value
+                  SOC_combined != "yes" | # If SOC samples were not combined, why?
+                  TXT_collected != "yes") # If texture sample was not collected, why?
+# Two plots with outlier (low) total mass for SOC1
+# Five plots missing samples - plot notes account for reason
+# Two plots with outlier (high) total mass for SOC2
 
 
 # Rootpit QC
 rootpit_qc <- Mafisa_2_data_join %>%
   dplyr::select(ObjectID:PlotNotes, RootPit_collected:RootPit_notes) %>%
   dplyr::filter(RootPit_collected == "yes" & is.na(RootPit_depth)) # If root pit was collected, depth should not be NA
-                  
+
 
 
 # Percent cover and densiometer QC
@@ -194,75 +196,83 @@ pct_qc <- Mafisa_2_data_join %>%
   dplyr::select(ObjectID:PlotNotes, Densi_collected:PCT_notes) %>%
   dplyr::mutate(LowerCanopyCover = DRH_pct + SRH_pct + SHRUB_pct + BARE_pct) %>% # Add a lower canopy column - this should not exceed 100
   dplyr::filter(Densi_collected == "yes" & is.na(DensiCanopyCover) | # If densiometer was used, canopy cover should not be NA
-                DensiCanopyCover > 100 | # Densiometer canopy cover should not exceed 100
-                PCT_collected == "yes" & if_any(c(TREE_pct, DRH_pct, SRH_pct, SHRUB_pct, BARE_pct), ~ is.na(.)) | # If percent cover was estimated, no funtional group should be NA
-                TotalCover < 100 | # Total cover should not be below 100
-                TotalCover > 200 | # Total cover should not exceed 200
-                LowerCanopyCover > 100) # Lower canopy cover should not exceed 100, except perhaps in rare situations where shrub cover is high and shrubs have an unusual shape allowing for beneath shrub cover to be estimated
+                  DensiCanopyCover > 100 | # Densiometer canopy cover should not exceed 100
+                  PCT_collected == "yes" & if_any(c(TREE_pct, DRH_pct, SRH_pct, SHRUB_pct, BARE_pct), ~ is.na(.)) | # If percent cover was estimated, no funtional group should be NA
+                  TotalCover < 100 | # Total cover should not be below 100
+                  TotalCover > 200 | # Total cover should not exceed 200
+                  LowerCanopyCover > 100) # Lower canopy cover should not exceed 100, except perhaps in rare situations where shrub cover is high and shrubs have an unusual shape allowing for beneath shrub cover to be estimated
+# Five plots with total cover < 100
+# One plot with unreasonably high bare ground estimate
 
 # THESE FIXES ARE FOR MOMBOLA PROJECT AREA ONLY
 # Fix error in percent bare ground estimate and recalculate total cover
 # Percent bare ground estimate is unreasonably high for Mombola4083 
-# 45 + 20 + 0 + 10 # Add other functional group estimates together
-# Mafisa_2_data_join[Mafisa_2_data_join$ObjectID == 52, "BARE_pct"] <- 25 # Overwrite bare ground to equal the difference of functional group sums (less bare ground) subtracted from 100
-# Mafisa_2_data_join[Mafisa_2_data_join$ObjectID == 52, "TotalCover"] <- 100 # Overwrite total cover to equal 100 (the new sum across all functional/ground cover groups)
+45 + 20 + 0 + 10 # Add other functional group estimates together
+Mafisa_2_data_join[Mafisa_2_data_join$ObjectID == 52, "BARE_pct"] <- 25 # Overwrite bare ground to equal the difference of functional group sums (less bare ground) subtracted from 100
+Mafisa_2_data_join[Mafisa_2_data_join$ObjectID == 52, "TotalCover"] <- 100 # Overwrite total cover to equal 100 (the new sum across all functional/ground cover groups)
 # Recreate the pct_qc dataframe and be sure that plot is now error free (and track in error tracking excel workbook)
+
+
 
 # Biomass QC
 bio_qc <- Mafisa_2_data_join %>%
   dplyr::select(ObjectID:PlotNotes, Biomass_collected:Biomass_notes) %>%
   dplyr::filter(Biomass_collected == "yes" & if_any(c(WoodyBio_length, WoodyBio_samples, WoodyBio_weight,
                                                       HerbBio_length, HerbBio_samples, HerbBio_weight), ~ is.na(.)) | # If biomass was collected, transect length, sample number, and weights should not be NA
-                WoodyBio_weight > 5000 | # Biomass weight should not exceed 2000
-                HerbBio_weight > 5000 ) # Biomass weight should not exceed 2000
+                  WoodyBio_weight > 5000 | # Biomass weight should not exceed 2000
+                  HerbBio_weight > 5000 ) # Biomass weight should not exceed 2000
+
+# One plot where woody transect length was recorded but no samples taken
 
 # Sapling count
 sapling_qc <- Mafisa_2_data_join %>%
   dplyr::select(ObjectID:PlotNotes, Sapling_collected:Sapling_count) %>%
   dplyr::filter(Sapling_collected == "yes" & if_any(c(Sapling_count_radius, Sapling_count), ~ is.na(.)) |
                   Sapling_count > 30)
-
+# 25 plots with outlier sapling counts
 
 
 # FOR MOMBOLA PROJECT AREA ONLY
 # Join baseline data collected in outdated S123 form (already QC'd to L2) to current data table
-# soilbiomass_l2 <- read.csv("L2/Baseline_Mafisa2_SoilBiomass_L2.csv")
-# names(soilbiomass_l2) # Check columns in soilbiomass table
-# names(Mafisa_2_data_join) # Check columns in working table
+soilbiomass_l2 <- read.csv("L2/Baseline_Mafisa2_SoilBiomass_L2.csv")
+names(soilbiomass_l2) # Check columns in soilbiomass table
+names(Mafisa_2_data_join) # Check columns in working table
 # Add variables to soilbiomass table so that tables can be joined
-# soilbiomass_l2$SoilPlot_alt <- NA
-# soilbiomass_l2$LandCover <- NA
-# soilbiomass_l2$LandCover_alt <- NA
-# soilbiomass_l2$SOC1_rock_volume <- NA
-# soilbiomass_l2$SOC2_rock_volume <- NA
-# soilbiomass_l2$Sapling_count_radius <- NA
-# soilbiomass_l2$Project <- "Nalolo-Mongu-Limulunga" # Specify project area
+soilbiomass_l2$SoilPlot_alt <- NA
+soilbiomass_l2$LandCover <- NA
+soilbiomass_l2$LandCover_alt <- NA
+soilbiomass_l2$SOC1_rock_volume <- NA
+soilbiomass_l2$SOC2_rock_volume <- NA
+soilbiomass_l2$Sapling_count_radius <- NA
+soilbiomass_l2$Project <- "Nalolo-Mongu-Limulunga" # Specify project area
 # Check date structure
-# str(soilbiomass_l2)
+str(soilbiomass_l2)
 
 # Rename/reorder variables from soilbiomass table so that it can be joined to current working table
-# names(soilbiomass_l2)
-# soilbiomass_l2 <- dplyr::select(soilbiomass_l2, ObjectID:SoilPlot, SoilPlot_alt, LandCover, LandCover_alt,
-                              #  Names, PlotNotes,
-                               # BD_collected, BD_depth, BD_frag_vol, BD_wet_mass_total:SOC1_depth,
-                              #  SOC1_rock_volume, SOC1_mass_total:SOC2_depth, SOC2_rock_volume, SOC2_mass_total:Sapling_collected,
-                               # Sapling_count_radius, Sapling_count:FormVersion, Project)
-# Mafisa_2_data_join <- dplyr::select(Mafisa_2_data_join, -Densi_mean)
+names(soilbiomass_l2)
+soilbiomass_l2 <- dplyr::select(soilbiomass_l2, ObjectID:SoilPlot, SoilPlot_alt, LandCover, LandCover_alt,
+                                Names, PlotNotes,
+                                BD_collected, BD_depth, BD_frag_vol, BD_wet_mass_total:SOC1_depth,
+                                SOC1_rock_volume, SOC1_mass_total:SOC2_depth, SOC2_rock_volume, SOC2_mass_total:Sapling_collected,
+                                Sapling_count_radius, Sapling_count:FormVersion, Project)
+Mafisa_2_data_join <- dplyr::select(Mafisa_2_data_join, -Densi_mean)
 # Do columns match?
-# names(soilbiomass_l2)
-# str(soilbiomass_l2)
-# names(Mafisa_2_data_join)
-# str(Mafisa_2_data_join)
+names(soilbiomass_l2)
+str(soilbiomass_l2)
+names(Mafisa_2_data_join)
+str(Mafisa_2_data_join)
 # Change working table dates to character
-# Mafisa_2_data_join$SurveyDate <- as.character(Mafisa_2_data_join$SurveyDate)
-# Mafisa_2_data_join$EditDate <- as.character(Mafisa_2_data_join$EditDate)
-# Mafisa_2_data_join$CreationDate <- as.character(Mafisa_2_data_join$CreationDate)
+Mafisa_2_data_join$SurveyDate <- as.character(Mafisa_2_data_join$SurveyDate)
+Mafisa_2_data_join$EditDate <- as.character(Mafisa_2_data_join$EditDate)
+Mafisa_2_data_join$CreationDate <- as.character(Mafisa_2_data_join$CreationDate)
 
 # Join tables
-# Mafisa_2_data_join <- rbind(Mafisa_2_data_join, soilbiomass_l2)
+Mafisa_2_data_join <- rbind(Mafisa_2_data_join, soilbiomass_l2)
 
 # Convert survey date back to date structure, standardized across dataset
-# Mafisa_2_data_join$SurveyDate <- as.Date(Mafisa_2_data_join$SurveyDate, format = "%Y-%m-%d %H:%M:%S")
+Mafisa_2_data_join$SurveyDate <- as.Date(Mafisa_2_data_join$SurveyDate, format = "%Y-%m-%d %H:%M:%S")
+
+
 
 
 # Look for clusters with less than three plots
@@ -281,14 +291,14 @@ clusters <- data_join_sf %>%
   dplyr::summarise(PlotCount = n()) %>%
   dplyr::filter(PlotCount != 3)
 # Save SF file to view in ArcMap
-sf::st_write(data_join_sf, "C:\\Users\\allie.heller\\OneDrive - Biodiversity Research Institute\\Desktop\\Mafisa 2\\Mafisa 2 Data\\Spatial\\Mafisa2_SoilBiomass_SiomaShangombo_SpatialQC_08122025.shp", append = FALSE)
+sf::st_write(data_join_sf, "C:\\Users\\allie.heller\\OneDrive - Biodiversity Research Institute\\Desktop\\Mafisa 2\\Mafisa 2 Data\\Spatial\\Mafisa2_SoilBiomass_Nalolo_SpatialQC_08122025.shp", append = FALSE)
 # Use clusters dataframe to identify clusters with less than/greater than 3 plots sampled
 
 
 
 
 # Save QC'd data - make sure to save data with the proper PROJECT AREA and DATE
-write.csv(Mafisa_2_data_join, "L2/Baseline_Mafisa2_SoilBiomass_SiomaShangombo_L2_08042025.csv", row.names = FALSE)
+write.csv(Mafisa_2_data_join, "L2/Baseline_Mafisa2_SoilBiomass_NaloloMonguLimulunga_L2_08042025.csv", row.names = FALSE)
 
 
 
@@ -296,8 +306,7 @@ write.csv(Mafisa_2_data_join, "L2/Baseline_Mafisa2_SoilBiomass_SiomaShangombo_L2
 
 
 
-
-
+# FOR MOMBOLA PROJECT AREA
 # It seems that BD weights have increased with time in the field - is this true? Make a plot to see
 Mafisa_2_data_join$Sample_Month_Day <- substr(Mafisa_2_data_join$SurveyDate, 1, 10) # Create new variable without sample time
 Mafisa_2_data_join$BD_depth <- as.factor(Mafisa_2_data_join$BD_depth) # Convert BD_depth to factor for plotting to see if low weights correspond with shallow cores
@@ -305,7 +314,7 @@ Mafisa_2_data_join$BD_depth <- as.factor(Mafisa_2_data_join$BD_depth) # Convert 
 ggplot2::ggplot(Mafisa_2_data_join, aes(x = Sample_Month_Day, y = BD_wet_mass_total, color = BD_depth)) + 
   geom_point() +
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
-# Consider modifying QC outlier tests for SOC and BD to a lower range of 8000
+# Lowest values don't correspond to short cores but do correspond to first sample day
 
 # Repeat for SOC core weights
 # SOC core 1

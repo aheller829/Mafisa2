@@ -88,9 +88,6 @@ dbh_qc <- dbh_clean  %>%
                   # is.na(Tree_ID)) # If any species name rows contain NA - disable this check if not using species IDs
 # Remove incorrect data if needed
 
-# THIS FIX IS FOR MOMBOLA PROJECT AREA ONLY
-# dbh_clean <- dplyr::filter(dbh_clean, ObjectID != 118 & ObjectID != 1225 & ObjectID != 1550 & ObjectID != 2704) - this is for Mombola project area only
-
 
 # Clean woody biomass table
 woodybio_clean <- woody_biomass_weight_increm_6 %>%
@@ -200,13 +197,6 @@ pct_qc <- Mafisa_2_data_join %>%
                 TotalCover > 200 | # Total cover should not exceed 200
                 LowerCanopyCover > 100) # Lower canopy cover should not exceed 100, except perhaps in rare situations where shrub cover is high and shrubs have an unusual shape allowing for beneath shrub cover to be estimated
 
-# THESE FIXES ARE FOR MOMBOLA PROJECT AREA ONLY
-# Fix error in percent bare ground estimate and recalculate total cover
-# Percent bare ground estimate is unreasonably high for Mombola4083 
-# 45 + 20 + 0 + 10 # Add other functional group estimates together
-# Mafisa_2_data_join[Mafisa_2_data_join$ObjectID == 52, "BARE_pct"] <- 25 # Overwrite bare ground to equal the difference of functional group sums (less bare ground) subtracted from 100
-# Mafisa_2_data_join[Mafisa_2_data_join$ObjectID == 52, "TotalCover"] <- 100 # Overwrite total cover to equal 100 (the new sum across all functional/ground cover groups)
-# Recreate the pct_qc dataframe and be sure that plot is now error free (and track in error tracking excel workbook)
 
 # Biomass QC
 bio_qc <- Mafisa_2_data_join %>%
@@ -222,47 +212,6 @@ sapling_qc <- Mafisa_2_data_join %>%
   dplyr::filter(Sapling_collected == "yes" & if_any(c(Sapling_count_radius, Sapling_count), ~ is.na(.)) |
                   Sapling_count > 30)
 
-
-
-# FOR MOMBOLA PROJECT AREA ONLY
-# Join baseline data collected in outdated S123 form (already QC'd to L2) to current data table
-# soilbiomass_l2 <- read.csv("L2/Baseline_Mafisa2_SoilBiomass_L2.csv")
-# names(soilbiomass_l2) # Check columns in soilbiomass table
-# names(Mafisa_2_data_join) # Check columns in working table
-# Add variables to soilbiomass table so that tables can be joined
-# soilbiomass_l2$SoilPlot_alt <- NA
-# soilbiomass_l2$LandCover <- NA
-# soilbiomass_l2$LandCover_alt <- NA
-# soilbiomass_l2$SOC1_rock_volume <- NA
-# soilbiomass_l2$SOC2_rock_volume <- NA
-# soilbiomass_l2$Sapling_count_radius <- NA
-# soilbiomass_l2$Project <- "Nalolo-Mongu-Limulunga" # Specify project area
-# Check date structure
-# str(soilbiomass_l2)
-
-# Rename/reorder variables from soilbiomass table so that it can be joined to current working table
-# names(soilbiomass_l2)
-# soilbiomass_l2 <- dplyr::select(soilbiomass_l2, ObjectID:SoilPlot, SoilPlot_alt, LandCover, LandCover_alt,
-                              #  Names, PlotNotes,
-                               # BD_collected, BD_depth, BD_frag_vol, BD_wet_mass_total:SOC1_depth,
-                              #  SOC1_rock_volume, SOC1_mass_total:SOC2_depth, SOC2_rock_volume, SOC2_mass_total:Sapling_collected,
-                               # Sapling_count_radius, Sapling_count:FormVersion, Project)
-# Mafisa_2_data_join <- dplyr::select(Mafisa_2_data_join, -Densi_mean)
-# Do columns match?
-# names(soilbiomass_l2)
-# str(soilbiomass_l2)
-# names(Mafisa_2_data_join)
-# str(Mafisa_2_data_join)
-# Change working table dates to character
-# Mafisa_2_data_join$SurveyDate <- as.character(Mafisa_2_data_join$SurveyDate)
-# Mafisa_2_data_join$EditDate <- as.character(Mafisa_2_data_join$EditDate)
-# Mafisa_2_data_join$CreationDate <- as.character(Mafisa_2_data_join$CreationDate)
-
-# Join tables
-# Mafisa_2_data_join <- rbind(Mafisa_2_data_join, soilbiomass_l2)
-
-# Convert survey date back to date structure, standardized across dataset
-# Mafisa_2_data_join$SurveyDate <- as.Date(Mafisa_2_data_join$SurveyDate, format = "%Y-%m-%d %H:%M:%S")
 
 
 # Look for clusters with less than three plots
@@ -295,28 +244,4 @@ write.csv(Mafisa_2_data_join, "L2/Baseline_Mafisa2_SoilBiomass_SiomaShangombo_L2
 
 
 
-
-
-
-# It seems that BD weights have increased with time in the field - is this true? Make a plot to see
-Mafisa_2_data_join$Sample_Month_Day <- substr(Mafisa_2_data_join$SurveyDate, 1, 10) # Create new variable without sample time
-Mafisa_2_data_join$BD_depth <- as.factor(Mafisa_2_data_join$BD_depth) # Convert BD_depth to factor for plotting to see if low weights correspond with shallow cores
-
-ggplot2::ggplot(Mafisa_2_data_join, aes(x = Sample_Month_Day, y = BD_wet_mass_total, color = BD_depth)) + 
-  geom_point() +
-  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
-# Consider modifying QC outlier tests for SOC and BD to a lower range of 8000
-
-# Repeat for SOC core weights
-# SOC core 1
-Mafisa_2_data_join$SOC1_depth <- as.factor(Mafisa_2_data_join$SOC1_depth) 
-ggplot2::ggplot(Mafisa_2_data_join, aes(x = Sample_Month_Day, y = SOC1_mass_total, color = SOC1_depth)) + 
-  geom_point() +
-  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
-# SOC core 2
-Mafisa_2_data_join$SOC2_depth <- as.factor(Mafisa_2_data_join$SOC2_depth) 
-ggplot2::ggplot(Mafisa_2_data_join, aes(x = Sample_Month_Day, y = SOC2_mass_total, color = SOC2_depth)) + 
-  geom_point() +
-  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
-# Fewer outlier weights for soil cores, and those that are low outliers do correspond to shallow cores
 
