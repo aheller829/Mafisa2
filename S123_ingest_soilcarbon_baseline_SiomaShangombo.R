@@ -12,8 +12,8 @@ setwd(dir)
 
 
 # Read in the L1 data
-mafisa2_soil_biomass <- excel_sheets("L1/20250804_BaselineSiomaShangombo_L1.xlsx") # File path - update to reflect most recent data download
-mafisa2_soil_biomass_list <- lapply(mafisa2_soil_biomass, function(x) read_excel("L1/20250804_BaselineSiomaShangombo_L1.xlsx", sheet = x))  # Read excel file into list of excel sheets - update file name to reflect most recent data download
+mafisa2_soil_biomass <- excel_sheets("L1/20250812_BaselineSiomaShangombo_L1.xlsx") # File path - update to reflect most recent data download
+mafisa2_soil_biomass_list <- lapply(mafisa2_soil_biomass, function(x) read_excel("L1/20250812_BaselineSiomaShangombo_L1.xlsx", sheet = x))  # Read excel file into list of excel sheets - update file name to reflect most recent data download
 names(mafisa2_soil_biomass_list ) <- mafisa2_soil_biomass # Pull sheet names from the workbook
 list2env(mafisa2_soil_biomass_list, envir=.GlobalEnv) # Write each excel sheet to a separate dataframe 
 
@@ -87,6 +87,10 @@ dbh_qc <- dbh_clean  %>%
                   is.na(Tree_dbh)) # If any dbh rows contain NA
                   # is.na(Tree_ID)) # If any species name rows contain NA - disable this check if not using species IDs
 # Remove incorrect data if needed
+# One plot has DbH measurement that is less than five
+dbh_clean <- dplyr::filter(dbh_clean, ObjectID != 2057) 
+# Rerun dbh_qc to make sure row was removed
+
 
 
 # Clean woody biomass table
@@ -166,6 +170,8 @@ bd_errors <- Mafisa_2_data_join %>%
 # Document missing data, outliers, etc. and connect with data collection crews if needed
 # Document any changes made to correct dataset
 
+# 11 outlier values where BD_mass_total is higher or lower than expected, one plot where WTD_mass is higher than expected
+
 
 
 # SOC/texture QC
@@ -177,6 +183,8 @@ soc_errors <- Mafisa_2_data_join %>%
                 if_any(c(SOC1_mass_total, SOC2_mass_total), ~ . < 8000) | # Lower expected SOC mass value
                 SOC_combined != "yes" | # If SOC samples were not combined, why?
                 TXT_collected != "yes") # If texture sample was not collected, why?
+# 8 plots with outlier core masses - one plot where cores were not combined, but notes do not specify why
+
 
 
 # Rootpit QC
@@ -196,6 +204,8 @@ pct_qc <- Mafisa_2_data_join %>%
                 TotalCover < 100 | # Total cover should not be below 100
                 TotalCover > 200 | # Total cover should not exceed 200
                 LowerCanopyCover > 100) # Lower canopy cover should not exceed 100, except perhaps in rare situations where shrub cover is high and shrubs have an unusual shape allowing for beneath shrub cover to be estimated
+# Two plots where total cover is below 100, one plot where densiometer was used and no value recorded, one plot where lower canopy cover is greater than 100
+
 
 
 # Biomass QC
@@ -211,6 +221,9 @@ sapling_qc <- Mafisa_2_data_join %>%
   dplyr::select(ObjectID:PlotNotes, Sapling_collected:Sapling_count) %>%
   dplyr::filter(Sapling_collected == "yes" & if_any(c(Sapling_count_radius, Sapling_count), ~ is.na(.)) |
                   Sapling_count > 30)
+
+
+
 
 
 
