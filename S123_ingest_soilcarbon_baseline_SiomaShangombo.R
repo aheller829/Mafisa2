@@ -250,7 +250,7 @@ sf::st_write(data_join_sf, "C:\\Users\\allie.heller\\OneDrive - Biodiversity Res
 
 
 # Save QC'd data - make sure to save data with the proper PROJECT AREA and DATE
-write.csv(Mafisa_2_data_join, "L2/Baseline_Mafisa2_SoilBiomass_SiomaShangombo_L2_08042025.csv", row.names = FALSE)
+write.csv(Mafisa_2_data_join, "L2/Baseline_Mafisa2_SoilBiomass_SiomaShangombo_L2_08122025.csv", row.names = FALSE)
 
 
 
